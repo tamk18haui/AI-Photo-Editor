@@ -1,0 +1,27 @@
+# Frontend
+**/node_modules/
+**/dist/
+
+# Backend
+**/target/
+**/.idea/
+*.iml
+
+# Python
+**/.venv/
+**/__pycache__/
+*.pyc
+ai-runner/weights/
+
+# Secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Temporary
+storage/
+temp/
+*.log
+
+# Windows
+Thumbs.db

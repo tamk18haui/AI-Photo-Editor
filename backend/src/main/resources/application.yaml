@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: ai-photo-editor
+
+  config:
+    import: "optional:file:./.env[.properties]"
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+server:
+  port: 8080

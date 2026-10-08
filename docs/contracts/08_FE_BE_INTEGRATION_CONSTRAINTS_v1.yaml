@@ -1,0 +1,563 @@
+contract:
+  name: AI Photo Editor - FE/BE Integration Constraints
+  version: 1.0.0
+  compatibleApiContract: 07_API_CONTRACT_v2_1_CLOUDINARY_FINAL.yaml
+  purpose: >-
+    Ràng buộc bổ sung cho OpenAPI để Frontend và Backend triển khai độc lập nhưng vẫn
+    dùng đúng cùng một kiểu dữ liệu, enum, flow, storage và quy tắc lỗi.
+  precedence:
+    endpointsAndDtos: 07_API_CONTRACT_v2_1_CLOUDINARY_FINAL.yaml
+    semanticRules: 08_FE_BE_INTEGRATION_CONSTRAINTS_v1.yaml
+    conflictRule: >-
+      Không merge code nếu hai file mâu thuẫn. Phải sửa cả contract trước rồi mới sửa code.
+
+sourceOfTruth:
+  apiBasePath: /api
+  fieldNaming: camelCase
+  jsonEncoding: UTF-8
+  dateTimeFormat: ISO-8601 UTC
+  dateTimeExample: 2026-10-07T13:40:45Z
+  idType: int64
+  idFrontendType: number
+  maxSafeIdRule: Backend không phát ID vượt quá JavaScript Number.MAX_SAFE_INTEGER.
+  booleans: [true, false]
+  noCustomFieldAliases: true
+  examples:
+    forbiddenAliases:
+      - project_id
+      - projectID
+      - asset_id
+      - job_id
+    requiredNames:
+      - projectId
+      - assetId
+      - jobId
+      - stateVersion
+
+responseShape:
+  successEnvelope:
+    enabled: false
+    rule: >-
+      Endpoint thành công trả trực tiếp schema đã khai báo trong OpenAPI. FE không đọc response.data.data.
+  axiosRule: response.data là payload nghiệp vụ.
+  noContent:
+    status: 204
+    body: null
+  error:
+    schema: ErrorResponse
+    requiredFields: [timestamp, status, code, message]
+    fieldErrorsNullable: true
+  arrays:
+    projectAssets: AssetResponse[]
+    aiJobs: AiJob[]
+  pagination:
+    projects:
+      schema: ProjectPageResponse
+      requiredFields: [items, page, size, totalElements, totalPages]
+
+http:
+  contentTypes:
+    json: application/json
+    upload: multipart/form-data
+    sse: text/event-stream
+  authHeader:
+    name: Authorization
+    valueFormat: Bearer <accessToken>
+  acceptedSuccessStatus:
+    create: 201
+    asyncJobCreate: 202
+    readOrUpdate: 200
+    deleteOrNoContent: 204
+  neverTreat202AsCompleted: true
+  cors:
+    frontendOriginMustBeConfigured: true
+    allowHeaders: [Authorization, Content-Type]
+    allowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+
+security:
+  frontendMustNeverContainSecrets:
+    - GEMINI_API_KEY
+    - CLOUDINARY_API_SECRET
+    - JWT_SIGNING_SECRET
+    - DATABASE_PASSWORD
+  cloudinary:
+    uploadSecretLocation: backend environment only
+    frontendUnsignedUpload: false
+  gemini:
+    directFrontendCall: false
+    flow: Frontend -> Spring Boot -> Gemini API
+  jwt:
+    accessTokenTransport: Authorization header
+    refreshTokenTransport: JSON body according to OpenAPI
+    passwordHash: BCrypt
+
+cloudinaryStorage:
+  enabled: true
+  rule: >-
+    Ảnh/file nhị phân lưu trên Cloudinary. MySQL chỉ lưu metadata và định danh Cloudinary;
+    tuyệt đối không lưu BLOB ảnh vào MySQL.
+  uploadFlow:
+    - FE gọi POST /api/projects/{projectId}/assets bằng multipart/form-data.
+    - BE kiểm tra JWT và quyền sở hữu project.
+    - BE validate file.
+    - BE upload file lên Cloudinary bằng API secret ở backend.
+    - Cloudinary trả secure_url, public_id, format, bytes, width, height.
+    - BE lưu metadata vào MySQL.
+    - BE trả AssetResponse cho FE.
+    - FE dùng AssetResponse.url để hiển thị ảnh.
+  apiMapping:
+    AssetResponse.url: Cloudinary secure_url
+    ProjectResponse.thumbnailUrl: Cloudinary secure_url hoặc null
+    UserResponse.avatarUrl: Cloudinary secure_url hoặc null
+    AiJob.resultUrl: Cloudinary secure_url hoặc null
+    ExportResponse.url: Cloudinary secure_url
+  mysqlAssetRecord:
+    requiredColumns:
+      - id
+      - projectId
+      - cloudinaryPublicId
+      - secureUrl
+      - assetType
+      - mimeType
+      - fileSize
+      - createdAt
+    optionalColumns:
+      - originalFileName
+      - format
+      - width
+      - height
+      - derivedFromAssetId
+      - updatedAt
+    cloudinaryPublicIdRule: >-
+      Bắt buộc lưu public_id, không chỉ lưu URL, vì backend cần public_id để xóa/ghi đè/quản lý asset.
+  urlRules:
+    httpsOnly: true
+    persistBlobUrl: false
+    persistDataUrl: false
+    persistLocalFilePath: false
+    frontendCanvasCrossOrigin: anonymous
+    fabricRule: >-
+      Khi Fabric.js tải ảnh từ Cloudinary phải set crossOrigin='anonymous' để canvas vẫn export được.
+  publicIdPattern: ai-photo-editor/users/{userId}/projects/{projectId}/{assetType}/{uuid}
+  overwriteExistingAsset: false
+  deleteFlow:
+    - FE gửi assetId, không gửi cloudinaryPublicId.
+    - BE tra assetId trong MySQL và kiểm tra quyền.
+    - BE xóa asset trên Cloudinary bằng cloudinaryPublicId.
+    - Chỉ sau khi Cloudinary trả thành công mới xóa/đánh dấu xóa record MySQL.
+  aiOutputFlow:
+    - AI Local/Gemini tạo output tạm thời.
+    - BE upload output lên Cloudinary với assetType=AI_OUTPUT.
+    - BE tạo Asset record mới.
+    - AiJob.resultAssetId trỏ tới record mới.
+    - AiJob.resultUrl bằng secureUrl của asset output.
+    - File tạm trên server phải được xóa sau khi upload thành công/thất bại.
+  defaultUploadLimits:
+    note: Có thể đổi bằng config nhưng FE và BE phải dùng cùng giá trị.
+    maxBytes: 20971520
+    allowedMimeTypes:
+      - image/jpeg
+      - image/png
+      - image/webp
+    allowedExtensions: [.jpg, .jpeg, .png, .webp]
+
+nullabilityAndRequired:
+  rule: >-
+    Field nằm trong required phải luôn xuất hiện. Field nullable có thể có giá trị null.
+    Không dùng chuỗi rỗng để thay cho null trừ khi schema cho phép.
+  frontendRule: Không tự giả định field nullable là luôn có giá trị.
+  backendRule: Không trả thiếu field required.
+  examples:
+    correct:
+      thumbnailUrl: null
+    incorrect:
+      thumbnailUrl: ''
+
+editorState:
+  owner: FRONTEND
+  storageOwner: BACKEND
+  schema: EditorState
+  serialization:
+    objects: Fabric.js serialized objects; backend coi là opaque JSON.
+    activeFilters: opaque JSON do frontend định nghĩa.
+    backendMustNotRemapFabricProperties: true
+  saveFlow:
+    - FE serialize editor state.
+    - FE PUT /projects/{projectId}/state.
+    - BE lưu JSON nguyên vẹn + increment stateVersion.
+    - BE trả SaveStateResponse.
+    - FE lưu stateVersion mới nhận được.
+  autosave:
+    debounceMilliseconds: 1500
+    concurrentSaveRule: Chỉ cho phép 1 save request đang chạy cho một project ở mỗi tab.
+    mvpConflictStrategy: last-write-wins
+    futureOptimisticLocking: If-Match/stateVersion có thể thêm sau MVP.
+  schemaVersion:
+    required: true
+    initialValue: 1
+    incrementRule: Chỉ tăng khi cấu trúc EditorState thay đổi, không tăng theo mỗi lần save.
+
+assetContract:
+  AssetType:
+    allowed: [ORIGINAL, IMAGE, MASK, STICKER, AI_OUTPUT, THUMBNAIL, EXPORT]
+  display:
+    urlField: url
+    neverUsePublicIdOnFrontend: true
+  aiInput:
+    localAiUsesAssetId: true
+    directCloudinaryUrlFromFrontendToAiEndpoint: false
+
+maskContract:
+  format: PNG
+  colorSpace: GRAYSCALE_8BIT
+  dimensions: MUST_EQUAL_SOURCE_IMAGE
+  semantics:
+    white255: vùng được phép/chỉ định chỉnh sửa
+    black0: vùng phải giữ nguyên
+    grayValues: FE phải threshold về 0/255 trước khi gửi
+  transparentMaskNotAllowed: true
+  coordinateSpace: pixel coordinates of source image, not viewport/canvas CSS coordinates
+  frontendResponsibilities:
+    - Convert brush/selection từ viewport về tọa độ ảnh gốc.
+    - Export mask đúng width/height của source image.
+    - Hiển thị overlay chỉ là UI; file gửi backend vẫn là mask grayscale.
+  backendResponsibilities:
+    - Validate kích thước mask bằng ảnh nguồn.
+    - Reject mask sai kích thước bằng HTTP 400 + code MASK_DIMENSION_MISMATCH.
+
+editPlan:
+  planner: Gemini Text API through backend
+  planEndpoint: POST /api/natural-edit/plan
+  executeEndpoint: POST /api/natural-edit/execute
+  executeEndpointPhase: MVP
+  userConfirmationRequiredBeforeExecute: true
+  rule: >-
+    Gemini chỉ tạo plan. Spring Boot validate plan trước khi trả FE. FE không chạy action lạ
+    ngoài danh sách EditActionType.
+  executorRouting:
+    FRONTEND: React/Fabric.js/WebGL
+    LOCAL_AI: Spring Boot -> Python/PyTorch
+    GEMINI_IMAGE: Spring Boot -> Gemini Image API
+  ordering:
+    useArrayOrder: true
+    dependsOnMustBeSatisfied: true
+  unknownAction:
+    behavior: reject
+    httpStatus: 400
+    errorCode: EDIT_ACTION_UNSUPPORTED
+
+editActionContracts:
+  CROP:
+    executor: FRONTEND
+    params:
+      required: [ratio]
+      ratio:
+        type: string
+        allowed: [FREE, '1:1', '4:3', '3:4', '16:9', '9:16']
+  RESIZE:
+    executor: FRONTEND
+    params:
+      requiredAny: [[width], [height]]
+      width: {type: integer, min: 1, max: 12000}
+      height: {type: integer, min: 1, max: 12000}
+      keepAspectRatio: {type: boolean, default: true}
+  ROTATE:
+    executor: FRONTEND
+    params:
+      required: [degrees]
+      degrees: {type: number, min: -360, max: 360}
+  FLIP:
+    executor: FRONTEND
+    params:
+      required: [axis]
+      axis: {type: string, allowed: [HORIZONTAL, VERTICAL]}
+  BRIGHTNESS:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: -100, max: 100}
+  CONTRAST:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: -100, max: 100}
+  EXPOSURE:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: -100, max: 100}
+  SATURATION:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: -100, max: 100}
+  TEMPERATURE:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: -100, max: 100}
+  TINT:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: -100, max: 100}
+  BLUR:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: 0, max: 100}
+  SHARPNESS:
+    executor: FRONTEND
+    params:
+      required: [value]
+      value: {type: number, min: 0, max: 100}
+  FILTER:
+    executor: FRONTEND
+    params:
+      required: [preset, intensity]
+      preset:
+        type: string
+        allowed: [ORIGINAL, BW, GRAYSCALE, SEPIA, VINTAGE, WARM, COOL, FILM, VIVID, CINEMATIC, PORTRAIT, LANDSCAPE]
+      intensity: {type: number, min: 0, max: 100}
+  UPSCALE:
+    executor: LOCAL_AI
+    params:
+      required: [scale]
+      scale: {type: integer, allowed: [2, 4]}
+  REMOVE_BACKGROUND:
+    executor: LOCAL_AI
+    params:
+      required: []
+  DENOISE:
+    executor: LOCAL_AI
+    optional: true
+    params:
+      required: [strength]
+      strength: {type: string, allowed: [LIGHT, MEDIUM, STRONG]}
+  FACE_RESTORE:
+    executor: LOCAL_AI
+    optional: true
+    params:
+      required: []
+      fidelity: {type: number, min: 0, max: 1, default: 0.7}
+  REMOVE_OBJECT:
+    executor: GEMINI_IMAGE
+    params:
+      required: []
+      instruction: {type: string, maxLength: 1000}
+      maskAssetId: {type: int64, nullable: true}
+      rule: Mask optional for prompt-only remove; if user used Brush/Selection, maskAssetId must be sent.
+  REPLACE_OBJECT:
+    executor: GEMINI_IMAGE
+    params:
+      required: [prompt, maskAssetId]
+      prompt: {type: string, minLength: 1, maxLength: 2000}
+      maskAssetId: {type: int64}
+  REPLACE_BACKGROUND:
+    executor: GEMINI_IMAGE
+    params:
+      required: [prompt]
+      prompt: {type: string, minLength: 1, maxLength: 2000}
+      preserveForeground: {type: boolean, default: true}
+  GENERATIVE_FILL:
+    executor: GEMINI_IMAGE
+    params:
+      required: [prompt, maskAssetId]
+      prompt: {type: string, minLength: 1, maxLength: 2000}
+      maskAssetId: {type: int64}
+  GENERATIVE_EXPAND:
+    executor: GEMINI_IMAGE
+    params:
+      requiredAny: [[targetRatio], [top, right, bottom, left]]
+      targetRatio: {type: string, allowed: ['1:1', '4:3', '3:4', '16:9', '9:16'], nullable: true}
+      top: {type: integer, min: 0, nullable: true}
+      right: {type: integer, min: 0, nullable: true}
+      bottom: {type: integer, min: 0, nullable: true}
+      left: {type: integer, min: 0, nullable: true}
+      prompt: {type: string, nullable: true, maxLength: 2000}
+  RELIGHT_STYLE:
+    executor: GEMINI_IMAGE
+    params:
+      required: [prompt]
+      prompt: {type: string, minLength: 1, maxLength: 2000}
+
+aiJob:
+  createResponse: AiJobResponse
+  statusSchema: AiJob
+  statuses: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED]
+  terminalStatuses: [COMPLETED, FAILED, CANCELLED]
+  providerValues: [LOCAL, GEMINI]
+  progress:
+    type: integer
+    range: [0, 100]
+    nullable: true
+    rule: Không giả lập phần trăm nếu provider không cung cấp progress thật.
+  stage:
+    nullable: true
+    examples: [UPLOADING, PROCESSING, SAVING, COMPLETED]
+  completedRule:
+    requiredAtCompletion: [resultAssetId, resultUrl]
+    resultAssetType: AI_OUTPUT
+  failedRule:
+    requiredAtFailure: [errorCode, error]
+  retry:
+    allowedFrom: [FAILED, CANCELLED]
+  cancel:
+    allowedFrom: [QUEUED, RUNNING]
+
+sse:
+  endpoint: GET /api/ai/jobs/{jobId}/events
+  auth:
+    method: Authorization Bearer header
+    frontendImplementation: fetch-based SSE stream
+    nativeEventSourceAllowed: false
+    reason: Native EventSource không hỗ trợ custom Authorization header theo flow JWT hiện tại.
+  eventName: job-update
+  dataEncoding: JSON
+  dataSchema: AiJobEvent
+  eventExample: |
+    event: job-update
+    data: {"jobId":9001,"status":"RUNNING","progress":70,"stage":"UPSCALE"}
+  reconnect:
+    frontendMayReconnect: true
+    fallbackAfterDisconnect: GET /api/ai/jobs/{jobId}
+
+naturalEdit:
+  examplePrompt: crop 16:9, làm sáng ảnh và đổi nền thành biển
+  planExample:
+    planId: plan_01
+    actions:
+      - id: action_1
+        type: CROP
+        executor: FRONTEND
+        params: {ratio: '16:9'}
+      - id: action_2
+        type: BRIGHTNESS
+        executor: FRONTEND
+        params: {value: 10}
+      - id: action_3
+        type: REPLACE_BACKGROUND
+        executor: GEMINI_IMAGE
+        params: {prompt: realistic beach, preserveForeground: true}
+  executeResponseRule:
+    frontendActions: Chỉ chứa executor=FRONTEND.
+    createdJobs: Chứa job được tạo cho LOCAL_AI/GEMINI_IMAGE.
+  frontendMustNotCallGeminiDirectly: true
+
+errors:
+  format: ErrorResponse
+  knownCodes:
+    VALIDATION_ERROR: 400
+    INVALID_REQUEST: 400
+    EDIT_ACTION_UNSUPPORTED: 400
+    EDIT_ACTION_INVALID_PARAMS: 400
+    MASK_DIMENSION_MISMATCH: 400
+    UNSUPPORTED_IMAGE_TYPE: 400
+    FILE_TOO_LARGE: 413
+    AUTH_INVALID_CREDENTIALS: 401
+    AUTH_TOKEN_EXPIRED: 401
+    FORBIDDEN: 403
+    PROJECT_NOT_FOUND: 404
+    ASSET_NOT_FOUND: 404
+    AI_JOB_NOT_FOUND: 404
+    AI_JOB_INVALID_STATE: 409
+    GEMINI_QUOTA_EXCEEDED: 429
+    AI_PROVIDER_TIMEOUT: 504
+    CLOUDINARY_UPLOAD_FAILED: 502
+    AI_PROCESSING_FAILED: 500
+  frontendRule:
+    - Ưu tiên xử lý theo code, không parse message.
+    - fieldErrors dùng để hiển thị lỗi từng input.
+    - 401 thử refresh token một lần; nếu refresh thất bại thì logout.
+    - 429 hiển thị thông báo quota và cho Retry sau.
+  backendRule:
+    - Không trả stack trace cho FE.
+    - message là thông báo ngắn; log chi tiết ở server.
+
+frontendImplementation:
+  generatedTypes:
+    recommendedTool: openapi-typescript
+    source: 07_API_CONTRACT_v2_1_CLOUDINARY_FINAL.yaml
+    rule: Không tự tạo interface trùng tên DTO đã có trong OpenAPI.
+  apiClient:
+    baseUrl: /api
+    attachBearerTokenAutomatically: true
+    refreshOn401Once: true
+  cloudinaryImageLoad:
+    setCrossOriginAnonymous: true
+  formData:
+    doNotSetMultipartBoundaryManually: true
+  ai:
+    trustOnlyAllowedEditActionTypes: true
+    doNotExecuteUnknownAction: true
+  state:
+    cropRotateAdjustRunLocally: true
+    saveSerializedStateThroughBackend: true
+
+backendImplementation:
+  dto:
+    mustMatchOpenApiFieldNamesExactly: true
+    jacksonNamingStrategy: camelCase
+  validation:
+    beanValidation: true
+    rejectUnknownEditAction: true
+    validateOwnershipOnEveryProjectAssetJobRequest: true
+  database:
+    imageBlobInMysql: false
+    cloudinaryUrlInMysql: true
+    cloudinaryPublicIdInMysql: true
+  transactionRules:
+    assetCreate: Cloudinary upload thành công trước khi commit Asset record.
+    assetDelete: Cloudinary delete thành công trước khi xóa/đánh dấu xóa Asset record.
+  aiRunner:
+    frontendNeverCallsPython: true
+    tempFileCleanupRequired: true
+
+integrationTestsRequiredBeforeMerge:
+  - name: Auth login contract
+    assert:
+      - POST /auth/login trả AuthResponse trực tiếp.
+      - accessToken, tokenType, userId tồn tại.
+  - name: Project create/open
+    assert:
+      - CreateProjectRequest field đúng camelCase.
+      - ProjectResponse required fields đầy đủ.
+  - name: Asset Cloudinary upload
+    assert:
+      - Upload multipart qua backend.
+      - AssetResponse.url bắt đầu bằng https://res.cloudinary.com/.
+      - MySQL có cloudinaryPublicId và secureUrl.
+  - name: Editor save/open
+    assert:
+      - EditorState serialize rồi load lại không mất objects.
+      - stateVersion tăng sau save.
+  - name: AI job
+    assert:
+      - Endpoint tạo AI trả 202 + AiJobResponse.
+      - COMPLETED có resultAssetId và resultUrl.
+      - FAILED có errorCode và error.
+  - name: SSE
+    assert:
+      - FE gửi Bearer token bằng fetch-based SSE.
+      - data parse được thành AiJobEvent.
+  - name: Natural edit
+    assert:
+      - Prompt trả EditPlan chỉ chứa EditActionType hợp lệ.
+      - Execute trả frontendActions và createdJobs đúng executor.
+  - name: Error contract
+    assert:
+      - Lỗi validation trả ErrorResponse.
+      - FE xử lý theo code, không phụ thuộc message.
+
+teamRules:
+  contractChangeProcess:
+    - Người muốn đổi field/enum/endpoint sửa OpenAPI trước.
+    - Review bởi ít nhất 1 FE và 1 BE.
+    - Regenerate types/DTO nếu dùng codegen.
+    - Sau đó mới merge code dùng contract mới.
+  forbidden:
+    - FE tự đổi field name để tiện code.
+    - BE trả thêm một wrapper success/data không có trong OpenAPI.
+    - FE gọi trực tiếp Cloudinary secret API hoặc Gemini.
+    - Lưu Blob/Base64 ảnh vào MySQL.
+    - Dùng đường dẫn file local của máy developer làm URL asset.

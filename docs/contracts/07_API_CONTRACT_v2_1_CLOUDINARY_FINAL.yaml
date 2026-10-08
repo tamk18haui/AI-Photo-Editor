@@ -1,0 +1,2101 @@
+openapi: 3.0.3
+
+info:
+  title: AI Photo Editor API
+  version: 2.1.0
+  description: |
+    API contract cho AI Photo Editor.
+    Quy ước:
+      - Tất cả endpoint bảo vệ dùng Bearer JWT.
+      - Ảnh/asset được lưu trên Cloudinary; MySQL chỉ lưu metadata, secure URL và cloudinary public_id.
+      - AssetResponse.url luôn là Cloudinary HTTPS secure_url; FE không dùng đường dẫn file local của backend.
+      - Tác vụ AI nặng trả về 202 + jobId, frontend theo dõi bằng GET job hoặc SSE.
+      - Các thao tác realtime như crop/rotate/brightness/text/layer/face effects chạy ở frontend,
+        vì vậy không có API riêng cho từng thao tác đó.
+      - x-phase: MVP = bắt buộc cho bản đầu; OPTIONAL = làm nếu còn thời gian.
+
+servers:
+  - url: /api
+    description: Base API path
+
+tags:
+  - name: Auth
+  - name: User
+  - name: Project
+  - name: Asset
+  - name: History
+  - name: Version
+  - name: AI Local
+  - name: AI Gemini
+  - name: Natural Edit
+  - name: AI Job
+  - name: Export
+  - name: Sharing
+
+paths:
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Đăng ký tài khoản
+      x-phase: MVP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Đăng ký thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Đăng nhập
+      x-phase: MVP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Cấp access token mới bằng refresh token
+      x-phase: MVP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token mới
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Đăng xuất và vô hiệu hóa refresh token hiện tại
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Đăng xuất thành công
+
+  /users/me:
+    get:
+      tags: [User]
+      operationId: getMyProfile
+      summary: Lấy thông tin tài khoản hiện tại
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Thông tin user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+    patch:
+      tags: [User]
+      operationId: updateMyProfile
+      summary: Cập nhật hồ sơ
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Hồ sơ sau khi cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+  /users/me/password:
+    put:
+      tags: [User]
+      operationId: changePassword
+      summary: Đổi mật khẩu
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Đổi mật khẩu thành công
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /projects:
+    get:
+      tags: [Project]
+      operationId: listProjects
+      summary: Danh sách project của user hiện tại
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+          description: Số trang, bắt đầu từ 0.
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          description: Số project mỗi trang.
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Tìm theo tên project.
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [UPDATED_DESC, UPDATED_ASC, NAME_ASC, NAME_DESC]
+            default: UPDATED_DESC
+          description: Thứ tự sắp xếp.
+      responses:
+        '200':
+          description: Danh sách project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPageResponse'
+    post:
+      tags: [Project]
+      operationId: createProject
+      summary: Tạo project mới
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project vừa tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+
+  /projects/{projectId}:
+    get:
+      tags: [Project]
+      operationId: getProject
+      summary: Lấy thông tin project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Project]
+      operationId: updateProject
+      summary: Đổi tên/cập nhật metadata project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      responses:
+        '200':
+          description: Project sau khi cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+    delete:
+      tags: [Project]
+      operationId: deleteProject
+      summary: Xóa project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204':
+          description: Đã xóa
+
+  /projects/{projectId}/duplicate:
+    post:
+      tags: [Project]
+      operationId: duplicateProject
+      summary: Nhân bản project / Save As
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DuplicateProjectRequest'
+      responses:
+        '201':
+          description: Project bản sao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+
+  /projects/{projectId}/state:
+    get:
+      tags: [Project]
+      operationId: loadEditorState
+      summary: Tải trạng thái editor để mở lại project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Editor state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorState'
+    put:
+      tags: [Project]
+      operationId: saveEditorState
+      summary: Save/autosave trạng thái editor
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EditorState'
+      responses:
+        '200':
+          description: Đã lưu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveStateResponse'
+
+  /projects/{projectId}/assets:
+    get:
+      tags: [Asset]
+      operationId: listProjectAssets
+      summary: Danh sách ảnh/mask/output thuộc project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: assetType
+          in: query
+          schema:
+            $ref: '#/components/schemas/AssetType'
+          description: Lọc theo loại asset; bỏ trống để lấy tất cả.
+      responses:
+        '200':
+          description: Danh sách asset
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetResponse'
+    post:
+      tags: [Asset]
+      operationId: uploadProjectAsset
+      summary: Upload ảnh, mask, sticker hoặc asset khác lên Cloudinary qua backend
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File nhị phân; backend validate rồi upload Cloudinary và lưu metadata/public_id/secure_url vào MySQL.
+                assetType:
+                  $ref: '#/components/schemas/AssetType'
+      responses:
+        '201':
+          description: Asset vừa upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+
+  /projects/{projectId}/assets/{assetId}:
+    get:
+      tags: [Asset]
+      operationId: getProjectAsset
+      summary: Lấy metadata của một asset
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Asset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+    delete:
+      tags: [Asset]
+      operationId: deleteProjectAsset
+      summary: Xóa asset khỏi project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '204':
+          description: Đã xóa asset
+
+  /projects/{projectId}/history:
+    get:
+      tags: [History]
+      operationId: getEditHistory
+      summary: Lấy lịch sử thao tác đã persist
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Lịch sử thao tác
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EditHistoryItem'
+    post:
+      tags: [History]
+      operationId: appendEditHistory
+      summary: Ghi một thao tác vào lịch sử backend
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHistoryItemRequest'
+      responses:
+        '201':
+          description: Lịch sử vừa tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditHistoryItem'
+
+  /projects/{projectId}/versions:
+    get:
+      tags: [Version]
+      operationId: listVersions
+      summary: Danh sách snapshot/version của project
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Danh sách version
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectVersion'
+    post:
+      tags: [Version]
+      operationId: createVersion
+      summary: Tạo snapshot thủ công
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVersionRequest'
+      responses:
+        '201':
+          description: Snapshot vừa tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVersion'
+
+  /projects/{projectId}/versions/{versionId}/restore:
+    post:
+      tags: [Version]
+      operationId: restoreVersion
+      summary: Khôi phục project về một version cũ
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/VersionId'
+      responses:
+        '200':
+          description: Editor state sau khi restore
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorState'
+
+  /ai/upscale:
+    post:
+      tags: [AI Local]
+      operationId: createUpscaleJob
+      summary: Tạo job upscale bằng Real-ESRGAN
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpscaleRequest'
+      responses:
+        '202':
+          description: Đã đưa vào hàng đợi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /ai/remove-background:
+    post:
+      tags: [AI Local]
+      operationId: createRemoveBackgroundJob
+      summary: Tách nền bằng BiRefNet
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveBackgroundRequest'
+      responses:
+        '202':
+          description: Đã đưa vào hàng đợi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /ai/denoise:
+    post:
+      tags: [AI Local]
+      operationId: createDenoiseJob
+      summary: Khử nhiễu/JPEG artifact bằng SwinIR
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DenoiseRequest'
+      responses:
+        '202':
+          description: Đã đưa vào hàng đợi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /ai/face-restore:
+    post:
+      tags: [AI Local]
+      operationId: createFaceRestoreJob
+      summary: Phục hồi khuôn mặt bằng CodeFormer
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaceRestoreRequest'
+      responses:
+        '202':
+          description: Đã đưa vào hàng đợi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /ai/analyze-quality:
+    post:
+      tags: [AI Local]
+      operationId: analyzeImageQuality
+      summary: Phân tích chất lượng ảnh phục vụ Auto Enhance
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageJobRequest'
+      responses:
+        '200':
+          description: Các chỉ số chất lượng ảnh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageQualityResponse'
+
+  /ai/auto-enhance:
+    post:
+      tags: [AI Local]
+      operationId: createAutoEnhanceJob
+      summary: Tự phân tích và đề xuất/chạy pipeline cải thiện ảnh
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoEnhanceRequest'
+      responses:
+        '202':
+          description: Job Auto Enhance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /ai/remove-object:
+    post:
+      tags: [AI Gemini]
+      operationId: createRemoveObjectJob
+      summary: Xóa vật thể bằng Gemini Image API
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [projectId, image]
+              properties:
+                projectId:
+                  type: integer
+                  format: int64
+                  description: ID project sở hữu tác vụ.
+                  example: 12
+                image:
+                  type: string
+                  format: binary
+                  description: Ảnh hiện tại cần chỉnh sửa.
+                mask:
+                  type: string
+                  format: binary
+                  nullable: true
+                  description: Mask vùng cần xóa; trắng = vùng cần chỉnh, đen = vùng giữ nguyên.
+                instruction:
+                  type: string
+                  description: Mô tả vật thể/vùng cần xóa nếu cần bổ sung cho mask.
+                  example: Remove the person in the background only.
+      responses:
+        '202':
+          description: Job đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /ai/generative-edit:
+    post:
+      tags: [AI Gemini]
+      operationId: createGenerativeEditJob
+      summary: Chỉnh sửa sinh ảnh bằng Gemini
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [projectId, image, operation, prompt]
+              properties:
+                projectId:
+                  type: integer
+                  format: int64
+                  description: ID project.
+                  example: 12
+                image:
+                  type: string
+                  format: binary
+                  description: Ảnh hiện tại cần chỉnh.
+                mask:
+                  type: string
+                  format: binary
+                  nullable: true
+                  description: Mask giới hạn vùng chỉnh sửa nếu operation hỗ trợ.
+                operation:
+                  $ref: '#/components/schemas/GenerativeOperation'
+                prompt:
+                  type: string
+                  minLength: 1
+                  description: Mô tả kết quả mong muốn.
+                  example: Replace the background with a realistic tropical beach.
+                preservePrompt:
+                  type: string
+                  nullable: true
+                  description: Ràng buộc vùng/thuộc tính cần giữ nguyên.
+                  example: Preserve the face, clothes and foreground subject.
+      responses:
+        '202':
+          description: Job đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /natural-edit/plan:
+    post:
+      tags: [Natural Edit]
+      operationId: createNaturalEditPlan
+      summary: Chuyển prompt ngôn ngữ tự nhiên thành EditPlan đã validate
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NaturalEditRequest'
+      responses:
+        '200':
+          description: EditPlan đã chuẩn hóa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditPlan'
+
+  /natural-edit/execute:
+    post:
+      tags: [Natural Edit]
+      operationId: executeNaturalEditPlan
+      summary: Yêu cầu backend thực thi các action backend/AI trong EditPlan
+      description: |
+        FRONTEND actions vẫn do frontend thực thi. Endpoint này dùng khi muốn backend nhận một plan
+        đã được user xác nhận và tạo các AI jobs tương ứng.
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteEditPlanRequest'
+      responses:
+        '202':
+          description: Kết quả khởi tạo thực thi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecuteEditPlanResponse'
+
+  /ai/jobs:
+    get:
+      tags: [AI Job]
+      operationId: listAiJobs
+      summary: Danh sách AI job của user/project
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: projectId
+          in: query
+          schema: { type: integer, format: int64 }
+          description: Lọc theo project.
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/AiJobStatus'
+          description: Lọc theo trạng thái.
+      responses:
+        '200':
+          description: Danh sách AI job
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiJob'
+
+  /ai/jobs/{jobId}:
+    get:
+      tags: [AI Job]
+      operationId: getAiJob
+      summary: Xem trạng thái một AI job
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: AI job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+
+  /ai/jobs/{jobId}/events:
+    get:
+      tags: [AI Job]
+      operationId: streamAiJobEvents
+      summary: SSE stream trạng thái job
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: |
+            text/event-stream. Mỗi event có event: job-update và data là JSON khớp AiJobEvent.
+            FE dùng fetch-based SSE để gửi Authorization: Bearer <JWT>; không dùng native EventSource.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: 'event: job-update\ndata: {"jobId":9001,"status":"RUNNING","progress":70,"stage":"UPSCALE"}\n\n'
+
+  /ai/jobs/{jobId}/cancel:
+    post:
+      tags: [AI Job]
+      operationId: cancelAiJob
+      summary: Yêu cầu hủy job
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job sau khi nhận yêu cầu cancel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+
+  /ai/jobs/{jobId}/retry:
+    post:
+      tags: [AI Job]
+      operationId: retryAiJob
+      summary: Chạy lại một job FAILED/CANCELLED
+      x-phase: MVP
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Job mới được tạo từ job cũ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
+
+  /projects/{projectId}/exports:
+    get:
+      tags: [Export]
+      operationId: listExports
+      summary: Danh sách file export đã lưu
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Danh sách export
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExportResponse'
+    post:
+      tags: [Export]
+      operationId: createExport
+      summary: Lưu metadata/file export lên backend
+      description: Nếu bản MVP export trực tiếp trong browser thì endpoint này có thể bỏ.
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, format]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File ảnh export.
+                format:
+                  $ref: '#/components/schemas/ExportFormat'
+                quality:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 90
+                  description: Chất lượng JPEG/WebP từ 1 đến 100.
+      responses:
+        '201':
+          description: Export vừa lưu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+
+  /projects/{projectId}/members:
+    get:
+      tags: [Sharing]
+      operationId: listProjectMembers
+      summary: Danh sách người được chia sẻ project
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Danh sách member
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectMember'
+    post:
+      tags: [Sharing]
+      operationId: addProjectMember
+      summary: Chia sẻ project cho user khác
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddProjectMemberRequest'
+      responses:
+        '201':
+          description: Member vừa thêm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+
+  /projects/{projectId}/members/{memberUserId}:
+    patch:
+      tags: [Sharing]
+      operationId: updateProjectMemberRole
+      summary: Đổi quyền thành viên
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MemberUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectMemberRoleRequest'
+      responses:
+        '200':
+          description: Member sau khi cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+    delete:
+      tags: [Sharing]
+      operationId: removeProjectMember
+      summary: Thu hồi quyền truy cập project
+      x-phase: OPTIONAL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MemberUserId'
+      responses:
+        '204':
+          description: Đã xóa member khỏi project
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token nhận từ /auth/login hoặc /auth/refresh.
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      description: ID duy nhất của project.
+      schema:
+        type: integer
+        format: int64
+        example: 12
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      description: ID duy nhất của asset.
+      schema:
+        type: integer
+        format: int64
+        example: 301
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      description: ID duy nhất của AI job.
+      schema:
+        type: integer
+        format: int64
+        example: 9001
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      description: ID snapshot/version của project.
+      schema:
+        type: integer
+        format: int64
+        example: 42
+    MemberUserId:
+      name: memberUserId
+      in: path
+      required: true
+      description: ID user đang là thành viên của project.
+      schema:
+        type: integer
+        format: int64
+        example: 8
+
+  responses:
+    BadRequest:
+      description: Dữ liệu request không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Chưa đăng nhập hoặc token không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy tài nguyên
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email dùng để đăng nhập; phải duy nhất.
+          example: tam@example.com
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+          description: Mật khẩu thô gửi từ client qua HTTPS; backend hash bằng BCrypt trước khi lưu.
+          example: StrongPass123!
+        displayName:
+          type: string
+          maxLength: 100
+          description: Tên hiển thị của người dùng.
+          example: Tam
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email tài khoản.
+          example: tam@example.com
+        password:
+          type: string
+          writeOnly: true
+          description: Mật khẩu đăng nhập.
+          example: StrongPass123!
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          writeOnly: true
+          description: Refresh token được cấp khi đăng nhập.
+          example: eyJhbGciOi...
+
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          writeOnly: true
+          nullable: true
+          description: Refresh token cần revoke nếu backend lưu refresh token.
+
+    AuthResponse:
+      type: object
+      required: [accessToken, tokenType, userId]
+      properties:
+        accessToken:
+          type: string
+          readOnly: true
+          description: JWT access token dùng cho Authorization header.
+          example: eyJhbGciOiJIUzI1NiJ9...
+        refreshToken:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Token dùng để xin access token mới.
+          example: eyJhbGciOiJIUzI1NiJ9.refresh...
+        expiresIn:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Số giây còn hiệu lực của access token.
+          example: 3600
+        tokenType:
+          type: string
+          readOnly: true
+          description: Loại token, thông thường là Bearer.
+          example: Bearer
+        userId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID user đã đăng nhập.
+          example: 5
+        displayName:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Tên hiển thị.
+          example: Tam
+
+    UserResponse:
+      type: object
+      required: [id, email, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID user.
+          example: 5
+        email:
+          type: string
+          format: email
+          readOnly: true
+          description: Email tài khoản.
+          example: tam@example.com
+        displayName:
+          type: string
+          description: Tên hiển thị.
+          example: Tam
+        avatarUrl:
+          type: string
+          nullable: true
+          description: URL avatar nếu có.
+          example: https://res.cloudinary.com/demo/image/upload/v1/ai-photo-editor/users/5/avatar/avatar.webp
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Thời điểm tạo tài khoản.
+          example: 2026-10-06T07:00:00Z
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          maxLength: 100
+          description: Tên hiển thị mới.
+          example: Chu Ba Tam
+        avatarAssetId:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID asset dùng làm avatar nếu hệ thống quản lý avatar như asset.
+          example: 501
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          writeOnly: true
+          description: Mật khẩu hiện tại.
+        newPassword:
+          type: string
+          minLength: 8
+          writeOnly: true
+          description: Mật khẩu mới.
+
+    CreateProjectRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          description: Tên project.
+          example: Anh du lich Da Nang
+        canvasWidth:
+          type: integer
+          minimum: 1
+          default: 1920
+          description: Chiều rộng canvas logic tính theo pixel.
+          example: 1920
+        canvasHeight:
+          type: integer
+          minimum: 1
+          default: 1080
+          description: Chiều cao canvas logic tính theo pixel.
+          example: 1080
+        background:
+          type: string
+          nullable: true
+          description: Màu/nền khởi tạo; có thể là HEX, rgba hoặc null.
+          example: "#FFFFFF"
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          description: Tên project mới.
+          example: Poster Facebook v2
+        thumbnailAssetId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Asset dùng làm thumbnail project.
+          example: 310
+
+    DuplicateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Tên cho project bản sao.
+          example: Poster Facebook - Copy
+
+    ProjectResponse:
+      type: object
+      required: [id, name, ownerId, canvasWidth, canvasHeight, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID project.
+          example: 12
+        name:
+          type: string
+          description: Tên project.
+          example: Poster Facebook
+        ownerId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID chủ sở hữu project.
+          example: 5
+        canvasWidth:
+          type: integer
+          description: Chiều rộng canvas.
+          example: 1920
+        canvasHeight:
+          type: integer
+          description: Chiều cao canvas.
+          example: 1080
+        thumbnailUrl:
+          type: string
+          nullable: true
+          description: URL thumbnail.
+          example: https://res.cloudinary.com/demo/image/upload/v1/ai-photo-editor/users/5/projects/12/thumbnail/thumb.webp
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Thời điểm tạo project.
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Thời điểm cập nhật gần nhất.
+
+    ProjectPageResponse:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          description: Project của trang hiện tại.
+          items:
+            $ref: '#/components/schemas/ProjectResponse'
+        page:
+          type: integer
+          description: Trang hiện tại, bắt đầu từ 0.
+          example: 0
+        size:
+          type: integer
+          description: Kích thước trang.
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          description: Tổng số project.
+          example: 57
+        totalPages:
+          type: integer
+          description: Tổng số trang.
+          example: 3
+
+    EditorState:
+      type: object
+      required: [schemaVersion, canvas, objects]
+      description: Snapshot editor có thể serialize/deserialize để mở lại project.
+      properties:
+        schemaVersion:
+          type: integer
+          minimum: 1
+          description: Phiên bản schema để hỗ trợ migrate state về sau.
+          example: 1
+        canvas:
+          $ref: '#/components/schemas/CanvasState'
+        objects:
+          type: array
+          description: Các object/layer do Fabric.js serialize.
+          items:
+            type: object
+            additionalProperties: true
+        activeFilters:
+          type: array
+          description: Các filter/adjustment ở mức toàn ảnh nếu không nằm trong object Fabric.
+          items:
+            type: object
+            additionalProperties: true
+        selectedObjectId:
+          type: string
+          nullable: true
+          description: ID object đang được chọn; có thể bỏ khi persist nếu không cần.
+          example: layer_17
+
+    CanvasState:
+      type: object
+      required: [width, height]
+      properties:
+        width:
+          type: integer
+          minimum: 1
+          description: Chiều rộng canvas.
+          example: 1920
+        height:
+          type: integer
+          minimum: 1
+          description: Chiều cao canvas.
+          example: 1080
+        background:
+          type: string
+          nullable: true
+          description: Màu hoặc định danh nền.
+          example: "#FFFFFF"
+        zoom:
+          type: number
+          format: double
+          nullable: true
+          description: Zoom hiện tại của UI; có thể không cần persist.
+          example: 1.0
+
+    SaveStateResponse:
+      type: object
+      required: [projectId, savedAt, stateVersion]
+      properties:
+        projectId:
+          type: integer
+          format: int64
+          description: Project vừa được lưu.
+          example: 12
+        savedAt:
+          type: string
+          format: date-time
+          description: Thời điểm backend lưu thành công.
+        stateVersion:
+          type: integer
+          format: int64
+          description: Số revision để hỗ trợ optimistic locking/autosave.
+          example: 21
+
+    AssetType:
+      type: string
+      description: Phân loại file trong project.
+      enum: [ORIGINAL, IMAGE, MASK, STICKER, AI_OUTPUT, THUMBNAIL, EXPORT]
+
+    AssetResponse:
+      type: object
+      required: [assetId, projectId, url, assetType, mimeType, fileSize, createdAt]
+      properties:
+        assetId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID asset.
+          example: 301
+        projectId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Project sở hữu asset.
+          example: 12
+        url:
+          type: string
+          readOnly: true
+          description: Cloudinary HTTPS secure_url dùng để FE hiển thị/tải asset.
+          example: https://res.cloudinary.com/demo/image/upload/v1/ai-photo-editor/users/5/projects/12/image/301.webp
+        assetType:
+          $ref: '#/components/schemas/AssetType'
+        originalFileName:
+          type: string
+          nullable: true
+          description: Tên file khi user upload.
+          example: IMG_0012.jpg
+        mimeType:
+          type: string
+          description: MIME type của file.
+          example: image/jpeg
+        fileSize:
+          type: integer
+          format: int64
+          description: Dung lượng file tính bằng byte.
+          example: 2457600
+        width:
+          type: integer
+          nullable: true
+          description: Chiều rộng ảnh tính bằng pixel.
+          example: 4032
+        height:
+          type: integer
+          nullable: true
+          description: Chiều cao ảnh tính bằng pixel.
+          example: 3024
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Thời điểm tạo asset.
+
+    ImageJobRequest:
+      type: object
+      required: [projectId, assetId]
+      properties:
+        projectId:
+          type: integer
+          format: int64
+          description: ID project.
+          example: 12
+        assetId:
+          type: integer
+          format: int64
+          description: ID ảnh đầu vào đã upload.
+          example: 301
+
+    UpscaleRequest:
+      allOf:
+        - $ref: '#/components/schemas/ImageJobRequest'
+        - type: object
+          required: [scale]
+          properties:
+            scale:
+              type: integer
+              enum: [2, 4]
+              description: Hệ số phóng to của Real-ESRGAN.
+              example: 2
+            tileSize:
+              type: integer
+              minimum: 0
+              nullable: true
+              description: Kích thước tile khi ảnh lớn; 0/null để backend tự quyết định.
+              example: 512
+
+    RemoveBackgroundRequest:
+      allOf:
+        - $ref: '#/components/schemas/ImageJobRequest'
+        - type: object
+          properties:
+            outputMode:
+              type: string
+              enum: [TRANSPARENT, WHITE, COLOR, MASK_ONLY]
+              default: TRANSPARENT
+              description: Kiểu output sau tách nền.
+            backgroundColor:
+              type: string
+              nullable: true
+              description: Màu nền khi outputMode = COLOR.
+              example: "#FFFFFF"
+
+    DenoiseRequest:
+      allOf:
+        - $ref: '#/components/schemas/ImageJobRequest'
+        - type: object
+          properties:
+            strength:
+              type: string
+              enum: [LOW, MEDIUM, HIGH]
+              default: MEDIUM
+              description: Mức khử nhiễu.
+
+    FaceRestoreRequest:
+      allOf:
+        - $ref: '#/components/schemas/ImageJobRequest'
+        - type: object
+          properties:
+            fidelity:
+              type: number
+              format: double
+              minimum: 0
+              maximum: 1
+              default: 0.7
+              description: Mức ưu tiên giữ giống khuôn mặt gốc; 1 = giữ fidelity cao hơn.
+              example: 0.7
+
+    AutoEnhanceRequest:
+      allOf:
+        - $ref: '#/components/schemas/ImageJobRequest'
+        - type: object
+          properties:
+            mode:
+              type: string
+              enum: [AUTO, PORTRAIT, LANDSCAPE, DOCUMENT]
+              default: AUTO
+              description: Ngữ cảnh để chọn pipeline cải thiện ảnh.
+            previewOnly:
+              type: boolean
+              default: false
+              description: true = chỉ trả đề xuất/preview, chưa ghi output cuối.
+
+    ImageQualityResponse:
+      type: object
+      properties:
+        brightness:
+          type: number
+          format: double
+          description: Điểm độ sáng đã chuẩn hóa theo implementation.
+          example: 0.42
+        contrast:
+          type: number
+          format: double
+          description: Điểm tương phản.
+          example: 0.56
+        blurScore:
+          type: number
+          format: double
+          description: Điểm blur/sharpness; quy ước cụ thể phải cố định trong backend.
+          example: 118.5
+        noiseScore:
+          type: number
+          format: double
+          description: Ước lượng nhiễu.
+          example: 0.21
+        width:
+          type: integer
+          description: Chiều rộng ảnh.
+          example: 1280
+        height:
+          type: integer
+          description: Chiều cao ảnh.
+          example: 720
+        faceCount:
+          type: integer
+          description: Số khuôn mặt phát hiện được.
+          example: 1
+        recommendations:
+          type: array
+          description: Các hành động hệ thống đề xuất.
+          items:
+            type: string
+          example: [BRIGHTNESS_UP, DENOISE, UPSCALE_X2]
+
+    GenerativeOperation:
+      type: string
+      description: Loại chỉnh sửa generative gửi cho Gemini Image.
+      enum: [REPLACE_OBJECT, REPLACE_BACKGROUND, GENERATIVE_FILL, GENERATIVE_EXPAND, RELIGHT_STYLE]
+
+    NaturalEditRequest:
+      type: object
+      required: [projectId, prompt]
+      properties:
+        projectId:
+          type: integer
+          format: int64
+          description: Project hiện tại.
+          example: 12
+        prompt:
+          type: string
+          minLength: 1
+          description: Câu lệnh tự nhiên của user.
+          example: Crop 16:9, làm ảnh sáng hơn và đổi nền thành biển.
+        currentContext:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            Ngữ cảnh editor hiện tại giúp Gemini hiểu lệnh:
+            canvas size, selectedObjectId, active asset, available tools...
+          example:
+            canvasWidth: 1920
+            canvasHeight: 1080
+            selectedObjectId: null
+            activeAssetId: 301
+        language:
+          type: string
+          enum: [vi, en, auto]
+          default: auto
+          description: Ngôn ngữ của prompt hoặc auto để tự nhận diện.
+
+    EditActionType:
+      type: string
+      description: Tên action chuẩn dùng chung giữa Gemini planner, Spring Boot router và frontend executor.
+      enum:
+        - CROP
+        - RESIZE
+        - ROTATE
+        - FLIP
+        - BRIGHTNESS
+        - CONTRAST
+        - EXPOSURE
+        - SATURATION
+        - TEMPERATURE
+        - TINT
+        - BLUR
+        - SHARPNESS
+        - FILTER
+        - UPSCALE
+        - REMOVE_BACKGROUND
+        - DENOISE
+        - FACE_RESTORE
+        - REMOVE_OBJECT
+        - REPLACE_OBJECT
+        - REPLACE_BACKGROUND
+        - GENERATIVE_FILL
+        - GENERATIVE_EXPAND
+        - RELIGHT_STYLE
+
+    EditExecutor:
+      type: string
+      description: Thành phần chịu trách nhiệm thực thi action.
+      enum: [FRONTEND, LOCAL_AI, GEMINI_IMAGE]
+
+    EditAction:
+      type: object
+      required: [id, type, executor, params]
+      properties:
+        id:
+          type: string
+          description: ID action duy nhất trong plan để theo dõi kết quả/phụ thuộc.
+          example: action_1
+        type:
+          $ref: '#/components/schemas/EditActionType'
+        executor:
+          $ref: '#/components/schemas/EditExecutor'
+        params:
+          type: object
+          additionalProperties: true
+          description: Tham số phụ thuộc từng type.
+          example:
+            ratio: "16:9"
+        dependsOn:
+          type: array
+          description: ID action phải hoàn thành trước action này.
+          items:
+            type: string
+          example: []
+        requiresConfirmation:
+          type: boolean
+          default: false
+          description: Có cần user xác nhận trước khi thực thi không.
+
+    EditPlan:
+      type: object
+      required: [planId, actions]
+      properties:
+        planId:
+          type: string
+          description: ID duy nhất của plan.
+          example: plan_01HXYZ
+        normalizedPrompt:
+          type: string
+          description: Prompt sau khi chuẩn hóa.
+          example: Crop to 16:9, increase brightness slightly, replace background with a beach.
+        actions:
+          type: array
+          minItems: 1
+          description: Danh sách action theo thứ tự logic sau khi planner/optimizer xử lý.
+          items:
+            $ref: '#/components/schemas/EditAction'
+        warnings:
+          type: array
+          description: Cảnh báo cho user trước khi chạy plan.
+          items:
+            type: string
+          example: []
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm plan được tạo.
+
+    ExecuteEditPlanRequest:
+      type: object
+      required: [projectId, plan]
+      properties:
+        projectId:
+          type: integer
+          format: int64
+          description: Project áp dụng plan.
+          example: 12
+        plan:
+          $ref: '#/components/schemas/EditPlan'
+        confirmedActionIds:
+          type: array
+          description: Các action user đã xác nhận nếu plan có action nhạy cảm/có chi phí.
+          items:
+            type: string
+
+    ExecuteEditPlanResponse:
+      type: object
+      required: [frontendActions, createdJobs]
+      properties:
+        frontendActions:
+          type: array
+          description: Action FE phải tự chạy bằng Fabric.js/WebGL.
+          items:
+            $ref: '#/components/schemas/EditAction'
+        createdJobs:
+          type: array
+          description: AI job backend đã tạo cho LOCAL_AI/GEMINI_IMAGE actions.
+          items:
+            $ref: '#/components/schemas/AiJobResponse'
+
+    AiJobResponse:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID job để FE theo dõi.
+          example: 9001
+        status:
+          $ref: '#/components/schemas/AiJobStatus'
+
+    AiJobStatus:
+      type: string
+      description: Trạng thái vòng đời của job.
+      enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED]
+
+    AiJob:
+      type: object
+      required: [jobId, projectId, type, provider, status, createdAt]
+      properties:
+        jobId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID job.
+          example: 9001
+        projectId:
+          type: integer
+          format: int64
+          description: Project sở hữu job.
+          example: 12
+        type:
+          type: string
+          description: Loại job, ví dụ UPSCALE, REMOVE_BACKGROUND, REMOVE_OBJECT.
+          example: UPSCALE
+        provider:
+          type: string
+          enum: [LOCAL, GEMINI]
+          description: Nơi thực thi job.
+          example: LOCAL
+        status:
+          $ref: '#/components/schemas/AiJobStatus'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          nullable: true
+          description: |
+            Phần trăm tiến độ nếu provider/model có thể đo được.
+            Không được giả lập % nếu API bên ngoài không cung cấp progress thật.
+          example: 70
+        stage:
+          type: string
+          nullable: true
+          description: Trạng thái mô tả cho job không có progress thật.
+          example: PROCESSING
+        inputAssetId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Asset đầu vào.
+          example: 301
+        resultAssetId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Asset output sau khi hoàn thành.
+          example: 450
+        resultUrl:
+          type: string
+          nullable: true
+          description: Cloudinary HTTPS secure_url của output để FE hiển thị nhanh.
+          example: https://res.cloudinary.com/demo/image/upload/v1/ai-photo-editor/users/5/projects/12/ai_output/450.webp
+        errorCode:
+          type: string
+          nullable: true
+          description: Mã lỗi máy đọc được.
+          example: GEMINI_QUOTA_EXCEEDED
+        error:
+          type: string
+          nullable: true
+          description: Thông báo lỗi cho developer/user.
+          example: Gemini quota exceeded.
+        createdAt:
+          type: string
+          format: date-time
+          description: Thời điểm tạo job.
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Thời điểm bắt đầu chạy.
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Thời điểm kết thúc.
+
+    AiJobEvent:
+      type: object
+      required: [jobId, status]
+      description: Payload đề xuất cho mỗi SSE event.
+      properties:
+        jobId:
+          type: integer
+          format: int64
+          description: Job phát sự kiện.
+        status:
+          $ref: '#/components/schemas/AiJobStatus'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          nullable: true
+          description: Progress nếu có.
+        stage:
+          type: string
+          nullable: true
+          description: Tên stage hiện tại.
+        resultAssetId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Output asset khi COMPLETED.
+        message:
+          type: string
+          nullable: true
+          description: Thông báo ngắn.
+
+    CreateHistoryItemRequest:
+      type: object
+      required: [actionType]
+      properties:
+        actionType:
+          type: string
+          description: Tên thao tác.
+          example: REMOVE_OBJECT
+        payload:
+          type: object
+          additionalProperties: true
+          description: Dữ liệu đủ để hiển thị/audit thao tác.
+        beforeStateRef:
+          type: string
+          nullable: true
+          description: Ref đến snapshot trước thao tác nếu có.
+        afterStateRef:
+          type: string
+          nullable: true
+          description: Ref đến snapshot sau thao tác nếu có.
+
+    EditHistoryItem:
+      allOf:
+        - $ref: '#/components/schemas/CreateHistoryItemRequest'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              readOnly: true
+              description: ID history.
+            createdAt:
+              type: string
+              format: date-time
+              readOnly: true
+              description: Thời điểm thao tác được ghi.
+
+    CreateVersionRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Tên gợi nhớ cho version.
+          example: Before replacing background
+
+    ProjectVersion:
+      type: object
+      properties:
+        versionId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID version.
+          example: 42
+        projectId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Project sở hữu version.
+          example: 12
+        label:
+          type: string
+          nullable: true
+          description: Nhãn version.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Thời điểm tạo snapshot.
+
+    ExportFormat:
+      type: string
+      enum: [PNG, JPEG, WEBP]
+      description: Định dạng ảnh export.
+
+    ExportResponse:
+      type: object
+      required: [exportId, projectId, format, url, createdAt]
+      properties:
+        exportId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID export.
+        projectId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Project nguồn.
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        url:
+          type: string
+          readOnly: true
+          description: Cloudinary HTTPS secure_url của file export.
+        width:
+          type: integer
+          nullable: true
+          description: Chiều rộng file export.
+        height:
+          type: integer
+          nullable: true
+          description: Chiều cao file export.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Thời điểm export.
+
+    ProjectRole:
+      type: string
+      description: Quyền thành viên trong project.
+      enum: [OWNER, EDITOR, REVIEWER, VIEWER]
+
+    AddProjectMemberRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email người được chia sẻ.
+          example: member@example.com
+        role:
+          $ref: '#/components/schemas/ProjectRole'
+
+    UpdateProjectMemberRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/ProjectRole'
+
+    ProjectMember:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+          readOnly: true
+          description: ID thành viên.
+          example: 8
+        email:
+          type: string
+          format: email
+          readOnly: true
+          description: Email thành viên.
+        displayName:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Tên hiển thị.
+        role:
+          $ref: '#/components/schemas/ProjectRole'
+
+    ErrorResponse:
+      type: object
+      required: [timestamp, status, code, message]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Thời điểm lỗi.
+        status:
+          type: integer
+          description: HTTP status code.
+          example: 400
+        code:
+          type: string
+          description: Mã lỗi nghiệp vụ để FE xử lý.
+          example: INVALID_REQUEST
+        message:
+          type: string
+          description: Thông báo lỗi ngắn.
+          example: Invalid request.
+        fieldErrors:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: Lỗi theo từng field khi validation thất bại.
+          example:
+            email: Invalid email format
