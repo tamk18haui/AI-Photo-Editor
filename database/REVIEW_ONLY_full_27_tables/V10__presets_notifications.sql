@@ -1,0 +1,13 @@
+-- OWNER: N1/N2/N5. EXTENDED.
+CREATE TABLE editor_presets (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, owner_user_id BIGINT NULL, preset_type VARCHAR(40) NOT NULL,
+ name VARCHAR(100) NOT NULL, payload_json JSON NOT NULL, is_public BOOLEAN NOT NULL DEFAULT FALSE,
+ created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+ KEY idx_preset_user_type (owner_user_id,preset_type), FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE notifications (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, kind VARCHAR(40) NOT NULL,
+ title VARCHAR(180) NOT NULL, body TEXT NULL, is_read BOOLEAN NOT NULL DEFAULT FALSE,
+ payload_json JSON NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), read_at DATETIME(3) NULL,
+ KEY idx_notify_user_read (user_id,is_read,created_at), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
