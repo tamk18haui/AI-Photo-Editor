@@ -1,0 +1,20 @@
+-- OWNER: N4 queue + N5 API/SSE.
+CREATE TABLE ai_jobs (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+ created_by_user_id BIGINT NULL, type VARCHAR(64) NOT NULL,
+ provider VARCHAR(16) NOT NULL, status VARCHAR(16) NOT NULL DEFAULT 'QUEUED',
+ progress SMALLINT NULL, stage VARCHAR(64) NULL,
+ input_asset_id BIGINT NULL, result_asset_id BIGINT NULL, result_url VARCHAR(2048) NULL,
+ params_json JSON NULL, error_code VARCHAR(100) NULL, error_message TEXT NULL,
+ attempt_count INT NOT NULL DEFAULT 0,
+ created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), started_at DATETIME(3) NULL, finished_at DATETIME(3) NULL,
+ KEY idx_job_project_created (project_id,created_at), KEY idx_job_status_created (status,created_at),
+ FOREIGN KEY (project_id) REFERENCES projects(id),
+ FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+ FOREIGN KEY (input_asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+ FOREIGN KEY (result_asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+ CONSTRAINT chk_job_status CHECK (status IN ('QUEUED','RUNNING','COMPLETED','FAILED','CANCELLED')),
+ CONSTRAINT chk_job_provider CHECK (provider IN ('LOCAL','GEMINI')),
+ CONSTRAINT chk_job_progress CHECK (progress IS NULL OR (progress >= 0 AND progress <= 100)),
+ CONSTRAINT chk_job_attempt CHECK (attempt_count >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

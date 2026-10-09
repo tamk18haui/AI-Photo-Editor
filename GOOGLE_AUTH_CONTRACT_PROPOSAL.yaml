@@ -1,0 +1,29 @@
+# REVIEW REQUIRED: Do NOT replace source-of-truth YAML without approval from N1/N3/Tam.
+# Proposed path addition to 07_API_CONTRACT_v2_1_CLOUDINARY_FINAL.yaml
+paths:
+  /auth/google:
+    post:
+      tags: [Auth]
+      operationId: loginWithGoogleCredential
+      summary: Exchange Google Identity Services ID token for app JWT
+      x-phase: MVP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential]
+              properties:
+                credential: {type: string, description: Google Identity Services ID token}
+      responses:
+        '200':
+          description: Auth response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+# until approved, GOOGLE_AUTH_ENABLED=false
