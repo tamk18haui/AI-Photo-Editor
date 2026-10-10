@@ -40,11 +40,9 @@ public class AiJobDispatcher {
 
             // Cancellation may occur while inference is running: never publish a cancelled result.
             if (jobs.loadWorker(job.id).status != AiJobStatus.RUNNING) return;
-            boolean masked = type == AiJobType.FACE_PARSING || type == AiJobType.REFINE_MASK ||
-                    ((type == AiJobType.SMART_SELECTION || type == AiJobType.REMOVE_BACKGROUND) &&
-                     "MASK_ONLY".equals(job.paramsJson == null ? "" :
-                              job.paramsJson.path("outputMode").asText(type == AiJobType.SMART_SELECTION ? "MASK_ONLY" : "TRANSPARENT")));
-            AssetType outputType = masked ? AssetType.MASK : AssetType.AI_OUTPUT;
+            // Face Parsing has four output modes: only LABEL_MAP/BINARY_MASK are masks.
+            // COLOR/OVERLAY must be saved as ordinary AI output images for the frontend.
+            AssetType outputType = outputAssetType(type, job.paramsJson);
             Asset saved = assets.storeForJob(job.projectId, job.createdByUserId, result,
                     "processed.png", source.id, outputType);
             if (!jobs.complete(job.id, saved)) {
@@ -54,6 +52,28 @@ public class AiJobDispatcher {
             String code = exception instanceof ApiException api ? api.getCode() : "AI_PROCESSING_FAILED";
             jobs.fail(job.id, code, "Image processing failed (" + code + ")");
         }
+    }
+
+    /** Classify the actual PNG returned by Python, not merely the AI job operation name. */
+    static AssetType outputAssetType(AiJobType type, JsonNode params) {
+        if (type == AiJobType.FACE_PARSING) {
+            // Python Face Parsing defaults to LABEL_MAP when outputMode is absent.
+            String mode = outputMode(params, "LABEL_MAP");
+            return "LABEL_MAP".equalsIgnoreCase(mode) || "BINARY_MASK".equalsIgnoreCase(mode)
+                    ? AssetType.MASK : AssetType.AI_OUTPUT;
+        }
+        if (type == AiJobType.REFINE_MASK) return AssetType.MASK;
+        if (type == AiJobType.SMART_SELECTION || type == AiJobType.REMOVE_BACKGROUND) {
+            String mode = outputMode(params,
+                    type == AiJobType.SMART_SELECTION ? "MASK_ONLY" : "TRANSPARENT");
+            return "MASK_ONLY".equalsIgnoreCase(mode) ? AssetType.MASK : AssetType.AI_OUTPUT;
+        }
+        return AssetType.AI_OUTPUT;
+    }
+
+    private static String outputMode(JsonNode params, String fallback) {
+        if (params == null || params.isNull()) return fallback;
+        return params.path("outputMode").asText(fallback);
     }
 
     /** Function: Fetch only mask/background asset references already checked against the owner. */
