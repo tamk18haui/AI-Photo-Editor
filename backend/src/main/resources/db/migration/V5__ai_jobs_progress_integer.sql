@@ -1,0 +1,2 @@
+ALTER TABLE ai_jobs
+MODIFY COLUMN progress INT NULL;

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+vendor/
+weights/**
+!weights/**/
+!weights/README.md
+!weights/WEIGHTS.md
+!weights/**/.gitkeep
