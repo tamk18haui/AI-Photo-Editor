@@ -1,0 +1,8 @@
+# Required for OpenCV processors and the private Runner API.
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+python-multipart>=0.0.20,<1
+pillow>=11,<13
+numpy>=1.26,<3
+opencv-python-headless>=4.10,<5
+python-dotenv>=1.0,<2

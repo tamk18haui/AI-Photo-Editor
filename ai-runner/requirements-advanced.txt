@@ -1,0 +1,3 @@
+# No generative diffusion model in the agreed seven-model release.
+# Optional advanced providers require a separate approved contract.
+-r requirements-models.txt
