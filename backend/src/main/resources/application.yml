@@ -4,6 +4,10 @@ server:
     include-message: never
     include-stacktrace: never
 spring:
+  config:
+    import:
+      - "optional:file:./.env[.properties]"
+      - "optional:file:./backend/.env[.properties]"
   application:
     name: ai-photo-editor
   datasource:

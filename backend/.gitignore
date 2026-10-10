@@ -1,33 +1,36 @@
+# N3 local secrets (never commit)
+/.env
+/.env.*
+!/.env.example
+
+# Spring Boot / Maven
 HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
+/target/
+!/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### STS ###
+# IDE / generated local files
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
+.sts4-cache/
+.idea/
 *.iws
 *.iml
 *.ipr
-
-### NetBeans ###
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
+/build/
 !**/src/main/**/build/
 !**/src/test/**/build/
-
-### VS Code ###
 .vscode/
+
+# Local logs
+*.log
