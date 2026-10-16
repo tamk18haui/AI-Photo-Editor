@@ -122,7 +122,15 @@ public class LocalImageService {
                 }
             }
             case SMART_SELECTION -> {
-                if (!params.path("points").isArray() || params.path("points").isEmpty()) throw invalid("Selection points required");
+                boolean hasPointPrompt = params.path("points").isArray() && !params.path("points").isEmpty();
+                boolean hasPositiveBrush = params.path("positiveBrushStrokes").isArray() && !params.path("positiveBrushStrokes").isEmpty();
+                boolean hasNegativeBrush = params.path("negativeBrushStrokes").isArray() && !params.path("negativeBrushStrokes").isEmpty();
+                boolean hasLassoPrompt = params.path("lassoPolygon").isArray() && params.path("lassoPolygon").size() >= 3;
+                boolean hasBoxPrompt = !params.path("box").isMissingNode() ||
+                        (params.path("boxes").isArray() && !params.path("boxes").isEmpty());
+                if (!(hasPointPrompt || hasPositiveBrush || hasNegativeBrush || hasLassoPrompt || hasBoxPrompt)) {
+                    throw invalid("Selection points, brush strokes, lasso or box required");
+                }
             }
             case REMOVE_OBJECT, INPAINT, REFINE_MASK, APPLY_MASK -> {
                 if (!params.path("maskAssetId").canConvertToLong()) throw invalid("maskAssetId is required");
