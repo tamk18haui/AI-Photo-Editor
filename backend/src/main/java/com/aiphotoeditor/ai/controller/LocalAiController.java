@@ -28,82 +28,148 @@ public class LocalAiController {
     }
 
     /** A selected image is identified by the server-side asset ID, never by URL. */
-    public record ImageRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId) {}
-    public record UpscaleRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId,
-                                 @NotNull @Min(2) @Max(4) Integer scale, @Min(0) @Max(2048) Integer tileSize) {}
-    public record RemoveBackgroundRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId,
-                                          String outputMode, String backgroundColor) {}
-    public record DenoiseRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId,
-                                 String strength) {}
-    public record AutoEnhanceRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId,
-                                     String mode, Boolean previewOnly) {}
-    public record FaceRestoreRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId,
-                                     Double fidelity) {}
-    public record OperationRequest(@NotNull @Min(1) Long projectId, @NotNull @Min(1) Long assetId,
-                                   JsonNode params) {}
+    public record ImageRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId) {}
 
-    /** POST /api/ai/upscale -> contract receipt (202/jobId). */
+    public record UpscaleRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId,
+            @NotNull @Min(2) @Max(4) Integer scale,
+            @Min(0) @Max(2048) Integer tileSize) {}
+
+    public record RemoveBackgroundRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId,
+            String outputMode,
+            String backgroundColor) {}
+
+    public record DenoiseRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId,
+            String strength) {}
+
+    public record AutoEnhanceRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId,
+            String mode,
+            Boolean previewOnly) {}
+
+    public record FaceRestoreRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId,
+            Double fidelity) {}
+
+    public record OperationRequest(
+            @NotNull @Min(1) Long projectId,
+            @NotNull @Min(1) Long assetId,
+            JsonNode params) {}
+
     @PostMapping("/upscale")
-    public ResponseEntity<AiJobDtos.AiJobResponse> upscale(@Valid @RequestBody UpscaleRequest request) {
-        return accepted(images.upscale(request.projectId(), request.assetId(), request.scale(), request.tileSize()));
+    public ResponseEntity<AiJobDtos.AiJobResponse> upscale(
+            @Valid @RequestBody UpscaleRequest request) {
+        return accepted(
+                images.upscale(
+                        request.projectId(),
+                        request.assetId(),
+                        request.scale(),
+                        request.tileSize()));
     }
 
-    /** POST /api/ai/remove-background -> source-preserving BiRefNet job. */
     @PostMapping("/remove-background")
-    public ResponseEntity<AiJobDtos.AiJobResponse> removeBackground(@Valid @RequestBody RemoveBackgroundRequest request) {
-        return accepted(images.removeBackground(request.projectId(), request.assetId(),
-                                               request.outputMode(), request.backgroundColor()));
+    public ResponseEntity<AiJobDtos.AiJobResponse> removeBackground(
+            @Valid @RequestBody RemoveBackgroundRequest request) {
+        return accepted(
+                images.removeBackground(
+                        request.projectId(),
+                        request.assetId(),
+                        request.outputMode(),
+                        request.backgroundColor()));
     }
 
-    /** POST /api/ai/denoise -> bounded OpenCV denoise job. */
     @PostMapping("/denoise")
-    public ResponseEntity<AiJobDtos.AiJobResponse> denoise(@Valid @RequestBody DenoiseRequest request) {
-        return accepted(images.denoise(request.projectId(), request.assetId(), request.strength()));
+    public ResponseEntity<AiJobDtos.AiJobResponse> denoise(
+            @Valid @RequestBody DenoiseRequest request) {
+        return accepted(
+                images.denoise(
+                        request.projectId(),
+                        request.assetId(),
+                        request.strength()));
     }
 
-    /** POST /api/ai/auto-enhance -> image enhancement job. */
     @PostMapping("/auto-enhance")
-    public ResponseEntity<AiJobDtos.AiJobResponse> autoEnhance(@Valid @RequestBody AutoEnhanceRequest request) {
-        return accepted(images.autoEnhance(request.projectId(), request.assetId(), request.mode(), request.previewOnly()));
+    public ResponseEntity<AiJobDtos.AiJobResponse> autoEnhance(
+            @Valid @RequestBody AutoEnhanceRequest request) {
+        return accepted(
+                images.autoEnhance(
+                        request.projectId(),
+                        request.assetId(),
+                        request.mode(),
+                        request.previewOnly()));
     }
 
-    /** POST /api/ai/face-restore -> restored face result asset. */
     @PostMapping("/face-restore")
-    public ResponseEntity<AiJobDtos.AiJobResponse> faceRestore(@Valid @RequestBody FaceRestoreRequest request) {
-        return accepted(images.faceRestore(request.projectId(), request.assetId(),
-                                          request.fidelity() == null ? 0.7 : request.fidelity()));
+    public ResponseEntity<AiJobDtos.AiJobResponse> faceRestore(
+            @Valid @RequestBody FaceRestoreRequest request) {
+        return accepted(
+                images.faceRestore(
+                        request.projectId(),
+                        request.assetId(),
+                        request.fidelity() == null ? 0.7 : request.fidelity()));
     }
 
-    /** POST /api/ai/analyze-quality -> synchronous contract JSON. */
     @PostMapping("/analyze-quality")
     public JsonNode analyze(@Valid @RequestBody ImageRequest request) {
-        return images.analyze(request.projectId(), request.assetId());
+        return images.analyze(
+                request.projectId(),
+                request.assetId());
     }
 
-    /** Extra local operations are namespaced to avoid overriding Gemini/Natural Edit routes. */
+    /** Return normalized face rectangles from an owned project asset. */
+    @PostMapping("/local/analyze-faces")
+    public JsonNode analyzeFaces(@Valid @RequestBody ImageRequest request) {
+        return images.detectFaces(
+                request.projectId(),
+                request.assetId());
+    }
+
+    /** Extra local operations avoid overriding Gemini/Natural Edit routes. */
     @PostMapping("/local/operations/{operation}")
-    public ResponseEntity<AiJobDtos.AiJobResponse> operation(@PathVariable String operation,
-                                                               @Valid @RequestBody OperationRequest request) {
+    public ResponseEntity<AiJobDtos.AiJobResponse> operation(
+            @PathVariable String operation,
+            @Valid @RequestBody OperationRequest request) {
         AiJobType type = Arrays.stream(AiJobType.values())
                 .filter(candidate -> candidate.runnerOperation().equals(operation))
-                .findFirst().orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST,
-                        "UNSUPPORTED_OPERATION", "AI operation not supported"));
-        return accepted(images.submit(request.projectId(), request.assetId(), type, request.params()));
+                .findFirst()
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.BAD_REQUEST,
+                        "UNSUPPORTED_OPERATION",
+                        "AI operation not supported"));
+
+        return accepted(
+                images.submit(
+                        request.projectId(),
+                        request.assetId(),
+                        type,
+                        request.params()));
     }
 
-    /** Local-only polling avoids dependency on the separate shared Job SSE controller. */
     @GetMapping("/local/jobs/{jobId}")
     public AiJobDtos.AiJobView localJob(@PathVariable long jobId) {
         return jobs.get(jobId);
     }
 
-    /** Return normalized facial landmarks from the project-owned image. */
     @PostMapping("/local/face-landmarks")
     public JsonNode faceLandmarks(@Valid @RequestBody ImageRequest request) {
-        return images.landmarks(request.projectId(), request.assetId());
+        return images.landmarks(
+                request.projectId(),
+                request.assetId());
     }
 
-    private ResponseEntity<AiJobDtos.AiJobResponse> accepted(AiJobDtos.AiJobResponse job) {
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(job);
+    private ResponseEntity<AiJobDtos.AiJobResponse> accepted(
+            AiJobDtos.AiJobResponse job) {
+        return ResponseEntity
+                .status(HttpStatus.ACCEPTED)
+                .body(job);
     }
 }

@@ -3,12 +3,14 @@ from functools import lru_cache
 from core.model_loader import required
 from core.device import select_device
 from core.errors import RunnerError
+from core.basicsr_compat import ensure_basicsr_compat
 
 @lru_cache(maxsize=8)
 def model_for(scale: int, tile: int = 0):
     """Build a cached RealESRGANer for the selected scale and tile size."""
     path = required(f"realesrgan_x{scale}")
     try:
+        ensure_basicsr_compat()
         from basicsr.archs.rrdbnet_arch import RRDBNet
         from realesrgan import RealESRGANer
         net = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23,
