@@ -48,7 +48,8 @@ public class SecurityConfig {
      .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
      .authorizeHttpRequests(a->a
        .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
-       .requestMatchers("/api/auth/register","/api/auth/login","/api/auth/refresh","/api/auth/google").permitAll()
+       .requestMatchers("/api/auth/register","/api/auth/login","/api/auth/refresh","/api/auth/google",
+                        "/api/auth/forgot-password","/api/auth/reset-password").permitAll()
        .requestMatchers("/actuator/health","/actuator/info").permitAll()
        .anyRequest().authenticated())
      .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults()).authenticationEntryPoint((req,res,e)->{
