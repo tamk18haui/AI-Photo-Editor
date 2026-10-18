@@ -10,6 +10,7 @@ from core.image_io import decode, to_png
 from processors.analyze_quality import run as quality, detect_faces
 from processors.landmarks import run as face_landmarks
 from tools.verify_models import EXPECTED
+from core.model_readiness import report as n4_model_readiness_report
 from processors.dispatch import execute, OPERATIONS
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def health():
 def capabilities(x_runner_token: str | None = Header(default=None)):
     """List available processor names; an operation may still require a checkpoint."""
     authorize(x_runner_token)
-    return {"operations": sorted(OPERATIONS),
+    return {**n4_model_readiness_report(), "operations": sorted(OPERATIONS),
             "modelFiles": {name: all((config.WEIGHTS / relative).is_file() for relative in paths)
                            for name, paths in EXPECTED.items()},
             "notice": "File presence does not certify compatibility; run inference smoke tests."}
@@ -70,6 +71,9 @@ async def process(operation: str, file: UploadFile = File(...), params: str = Fo
     image = decode(await file.read(config.MAX_BYTES + 1))
     selection = decode(await mask.read(config.MAX_BYTES + 1), mask=True) if mask else None
     backdrop = decode(await background.read(config.MAX_BYTES + 1)) if background else None
+    # HTTP boundary: reject user-supplied masks with incorrect image geometry.
+    if selection is not None and selection.size != image.size:
+        raise RunnerError("MASK_DIMENSION_MISMATCH", "Mask dimensions must equal current source image", 422)
     try:
         result = execute(operation, image, options, selection, backdrop)
         return Response(content=to_png(result), media_type="image/png")
@@ -94,3 +98,8 @@ async def landmarks(file: UploadFile = File(...), x_runner_token: str | None = H
     authorize(x_runner_token)
     image = decode(await file.read(config.MAX_BYTES + 1))
     return face_landmarks(image)
+# N4_FACE_STUDIO_V3_PLUGIN: additive API registration; legacy routes remain unchanged.
+from api.face_studio_routes import router as _n4_face_studio_router
+app.include_router(_n4_face_studio_router)
+# N4_HYBRID_FULL_V3_PATCHED
+# N4_MASK_GEOMETRY_COMPAT_HOTFIX_20261016
