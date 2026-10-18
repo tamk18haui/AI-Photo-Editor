@@ -9,7 +9,7 @@ from PIL import Image
 from core.config import WEIGHTS
 from core.errors import RunnerError
 from core.model_loader import required_path
-from processors.mask import resized_mask
+from processors.mask import require_source_mask
 
 _INFERENCE_LOCK = Lock()
 
@@ -39,7 +39,7 @@ def _model():
 
 def run(image: Image.Image, mask: Image.Image) -> Image.Image:
     """Inpaint the selected mask area, returning original-size RGB PNG data."""
-    selection = np.asarray(resized_mask(mask, image.size), dtype=np.uint8)
+    selection = np.asarray(require_source_mask(mask, image.size), dtype=np.uint8)
     selection = (selection >= 128).astype(np.float32)
     if not np.any(selection):
         raise RunnerError("EMPTY_MASK", "Mask contains no selected pixels", 422)
@@ -111,3 +111,4 @@ def run(image: Image.Image, mask: Image.Image) -> Image.Image:
 
     pixels = np.clip(pixels * 255.0, 0, 255).astype(np.uint8)
     return Image.fromarray(pixels, "RGB")
+# N4_HYBRID_FULL_V3_PATCHED

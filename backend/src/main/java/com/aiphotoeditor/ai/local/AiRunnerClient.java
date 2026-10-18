@@ -36,7 +36,7 @@ public class AiRunnerClient {
         requireToken();
         if (!Set.of("upscale","remove-background","denoise","auto-enhance","sharpen",
                     "adjust","white-balance","hdr-style","smart-selection","refine-mask","apply-mask","replace-background",
-                    "remove-object","inpaint","face-parsing","face-restore")
+                    "remove-object","inpaint","face-parsing","face-restore","makeup")
                     .contains(operation)) {
             throw new ApiException(HttpStatus.BAD_REQUEST,"UNSUPPORTED_OPERATION","Unknown AI operation");
         }
@@ -101,6 +101,97 @@ public class AiRunnerClient {
         }
     }
 
+    // N4_FACE_STUDIO_V3: typed operations are private runner calls, never public file URLs.
+    public JsonNode faceStudioDetect(byte[] input) {
+        return faceStudioJson("/v1/face-detect", input);
+    }
+
+    public JsonNode faceStudioLandmarks(byte[] input) {
+        return faceStudioJson("/v1/face-landmarks-v3", input);
+    }
+
+    private JsonNode faceStudioJson(String path, byte[] input) {
+        requireToken();
+        var form = new LinkedMultiValueMap<String, Object>();
+        form.add("file", resource("source.png", input));
+        try {
+            JsonNode result = client.post().uri(path)
+                    .header("X-Runner-Token", token)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(form).retrieve().body(JsonNode.class);
+            if (result == null) throw new IllegalStateException("Empty Face Studio reply");
+            return result;
+        } catch (RestClientResponseException exception) {
+            throw faceStudioError(exception);
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY,"AI_RUNNER_UNAVAILABLE",
+                                   "Face Studio runner is unavailable");
+        }
+    }
+
+    public byte[] faceStudioRegions(byte[] input, int faceIndex,
+                                    java.util.List<String> regions, String outputMode) {
+        requireToken();
+        var form = new LinkedMultiValueMap<String, Object>();
+        form.add("file", resource("source.png", input));
+        form.add("faceIndex", Integer.toString(faceIndex));
+        form.add("regions", mapper.valueToTree(regions).toString());
+        form.add("outputMode", outputMode);
+        try {
+            byte[] result = client.post().uri("/v1/face-regions")
+                    .header("X-Runner-Token", token)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(form).retrieve().body(byte[].class);
+            if (result == null || result.length == 0 || result.length > MAX_RESULT_BYTES) {
+                throw new ApiException(HttpStatus.BAD_GATEWAY,"FACE_MASK_OUTPUT_INVALID",
+                                       "Empty or oversized mask archive");
+            }
+            return result;
+        } catch (RestClientResponseException exception) {
+            throw faceStudioError(exception);
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY,"AI_RUNNER_UNAVAILABLE",
+                                   "Face Studio runner is unavailable");
+        }
+    }
+
+    private ApiException faceStudioError(RestClientResponseException exception) {
+        String code = "AI_PROCESSING_FAILED";
+        try {
+            JsonNode body = mapper.readTree(exception.getResponseBodyAsString());
+            String reported = body.path("code").asText("");
+            if (reported.matches("[A-Z_]{3,80}")) code = reported;
+        } catch (Exception ignored) { }
+        int status = exception.getStatusCode().value();
+        HttpStatus http = status == 422 ? HttpStatus.UNPROCESSABLE_ENTITY :
+                          status == 400 ? HttpStatus.BAD_REQUEST :
+                          status == 413 ? HttpStatus.PAYLOAD_TOO_LARGE :
+                          status == 503 ? HttpStatus.SERVICE_UNAVAILABLE :
+                          HttpStatus.BAD_GATEWAY;
+        return new ApiException(http, code, "Face Studio error: " + code);
+    }
+
+    // N4_HYBRID_FULL_V3: read private model readiness and operation catalog.
+    public JsonNode capabilitiesV3() {
+        requireToken();
+        try {
+            JsonNode result = client.get().uri("/v1/capabilities")
+                    .header("X-Runner-Token", token).retrieve().body(JsonNode.class);
+            if (result == null || !result.isObject())
+                throw new ApiException(HttpStatus.BAD_GATEWAY,"AI_CAPABILITIES_INVALID","Missing capabilities");
+            return result;
+        } catch (RestClientResponseException exception) {
+            throw translate(exception);
+        } catch (ApiException exception) { throw exception; }
+        catch (Exception exception) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY,"AI_RUNNER_UNAVAILABLE","Capabilities unavailable");
+        }
+    }
+
     /** Function: Request quality metrics for an authorized image asset. */
     public JsonNode quality(byte[] input) {
         requireToken();
@@ -148,3 +239,4 @@ public class AiRunnerClient {
         return new ApiException(HttpStatus.BAD_GATEWAY,code,"Python processor error: " + code);
     }
 }
+// N4_HYBRID_FULL_V3_PATCHED
