@@ -13,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class GeminiImageService {
     private final String apiKey;
     private final String model;
 
+    @Autowired
     public GeminiImageService(ObjectMapper mapper,
                               @Value("${GEMINI_API_KEY:}") String apiKey,
                               @Value("${GEMINI_IMAGE_MODEL:gemini-3.1-flash-image}") String model) {
@@ -165,3 +167,4 @@ public class GeminiImageService {
         return new ApiException(HttpStatus.BAD_REQUEST, code, message);
     }
 }
+
