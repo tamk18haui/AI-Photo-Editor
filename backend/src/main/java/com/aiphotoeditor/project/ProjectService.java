@@ -1,21 +1,44 @@
 package com.aiphotoeditor.project;
+
 import com.aiphotoeditor.project.ProjectDtos.*;
 import com.aiphotoeditor.assetbridge.AssetReferenceResolver;
 import com.aiphotoeditor.common.ApiException;
+import com.aiphotoeditor.undo.UndoRedoService;
+import com.aiphotoeditor.lifecycle.ProjectLifecycleService;
+import com.aiphotoeditor.history.EditHistoryEntity;
+import com.aiphotoeditor.history.EditHistoryRepository;
 import com.aiphotoeditor.user.UserRepository;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.*;
 import java.time.Instant;
 import java.util.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+/** N3 project and editor document state. Existing public constructor is preserved for tests. */
 @Service
 public class ProjectService {
- private final ProjectRepository projects;private final EditorStateRepository states;private final UserRepository users;
- private final ProjectAccessService access;private final AssetReferenceResolver assets;private final ObjectMapper mapper;
- public ProjectService(ProjectRepository projects,EditorStateRepository states,UserRepository users,ProjectAccessService access,AssetReferenceResolver assets,ObjectMapper mapper){
+ private final ProjectRepository projects;
+ private final EditorStateRepository states;
+ private final UserRepository users;
+ private final ProjectAccessService access;
+ private final AssetReferenceResolver assets;
+ private final ObjectMapper mapper;
+
+ @Autowired
+ private UndoRedoService undoRedo;
+
+ @Autowired
+ private ProjectLifecycleService lifecycle;
+
+ @Autowired
+ private EditHistoryRepository histories;
+
+ public ProjectService(ProjectRepository projects,EditorStateRepository states,UserRepository users,
+                       ProjectAccessService access,AssetReferenceResolver assets,ObjectMapper mapper){
   this.projects=projects;this.states=states;this.users=users;this.access=access;this.assets=assets;this.mapper=mapper;
  }
  @Transactional(readOnly=true)
@@ -44,7 +67,8 @@ public class ProjectService {
   if(p.background!=null)canvas.put("background",p.background);root.putArray("objects");root.putArray("activeFilters");return root;
  }
  private EditorStateEntity makeState(Project p,JsonNode data){
-  var s=new EditorStateEntity();s.project=p;s.stateJson=data.deepCopy();s.schemaVersion=data.path("schemaVersion").asInt(1);s.stateVersion=1L;s.createdAt=Instant.now();s.updatedAt=s.createdAt;return s;
+  var s=new EditorStateEntity();s.project=p;s.stateJson=data.deepCopy();s.schemaVersion=data.path("schemaVersion").asInt(1);
+  s.stateVersion=1L;s.createdAt=Instant.now();s.updatedAt=s.createdAt;return s;
  }
  @Transactional(readOnly=true)
  public ProjectResponse get(long id){return response(access.requireMine(id));}
@@ -59,46 +83,84 @@ public class ProjectService {
   }
   p.updatedAt=Instant.now();return response(projects.saveAndFlush(p));
  }
+ /** Lifecycle API is managed by ProjectLifecycleService. Kept for source compatibility. */
+ @Deprecated
  @Transactional
  public void delete(long id){
-  Project p=access.requireMine(id);
-  // N4 MUST coordinate Cloudinary asset cleanup / FK semantics before projects with assets are deleted.
-  projects.delete(p);projects.flush();
+  lifecycle.delete(id);
  }
+ /** Lifecycle API is managed by ProjectLifecycleService. Kept for source compatibility. */
+ @Deprecated
  @Transactional
  public ProjectResponse duplicate(long id,DuplicateProjectRequest r){
-  var original=access.requireMine(id);var p=new Project();p.owner=original.owner;
-  p.name=r==null||r.name()==null||r.name().isBlank()?"Copy of "+original.name:r.name().trim();
-  if(p.name.length()>150)throw new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Name too long");
-  p.canvasWidth=original.canvasWidth;p.canvasHeight=original.canvasHeight;p.background=original.background;
-  // Thumbnail and Fabric assets are NOT duplicated here; N4 must extend asset-copy semantics.
-  projects.saveAndFlush(p);
-  var old=states.findById(original.id);states.save(makeState(p,old.map(s->s.stateJson).orElseGet(()->initialState(p))));
-  return response(p);
+  return lifecycle.duplicate(id,r);
  }
  @Transactional(readOnly=true)
  public JsonNode getState(long id){
   Project p=access.requireMine(id);
-  return states.findById(p.id).<JsonNode>map(s -> s.stateJson.deepCopy()).orElseGet(() -> initialState(p));
+  return states.findById(p.id).<JsonNode>map(s->s.stateJson.deepCopy()).orElseGet(()->initialState(p));
  }
  @Transactional
- public SaveStateResponse saveState(long id,JsonNode data){
+ public SaveStateResponse saveState(long id,JsonNode data){return saveState(id,data,null);}
+
+ /** Optional expectedStateVersion prevents lost updates from concurrent tabs/slow AI requests. */
+ @Transactional
+ public SaveStateResponse saveState(long id,JsonNode data,Long expectedStateVersion){
   Project p=access.requireMine(id);
   validateState(data);
-  EditorStateEntity state=states.findById(id).orElseGet(()->{EditorStateEntity e=makeState(p,data);e.stateVersion=0L;return e;});
-  state.stateJson=data.deepCopy();state.schemaVersion=data.path("schemaVersion").asInt();state.stateVersion=state.stateVersion+1;state.updatedAt=Instant.now();
+  EditorStateEntity state=states.findLockedByProjectId(id).orElseGet(()->{
+   EditorStateEntity e=makeState(p,data);e.stateVersion=0L;return e;
+  });
+  long currentVersion=state.stateVersion==null?0:state.stateVersion;
+  if(expectedStateVersion!=null && expectedStateVersion!=currentVersion)
+   throw new ApiException(HttpStatus.CONFLICT,"STATE_VERSION_CONFLICT","Editor was changed in another request; reload before saving");
+  validateAssetRefs(data,p.id);
+  if(state.stateJson!=null && state.stateJson.equals(data) && currentVersion>0)
+   return new SaveStateResponse(id,state.updatedAt,currentVersion);
+  if(state.stateJson!=null && currentVersion>0 && undoRedo!=null)
+   undoRedo.recordBeforeSave(id,state.stateJson);
+  state.stateJson=data.deepCopy();state.schemaVersion=data.path("schemaVersion").asInt();
+  state.stateVersion=currentVersion+1;state.updatedAt=Instant.now();
   states.saveAndFlush(state);
   p.updatedAt=Instant.now();projects.save(p);
+  if(histories!=null){
+   EditHistoryEntity entry=new EditHistoryEntity();
+   entry.projectId=id;entry.userId=access.currentUserId();entry.actionType="EDITOR_STATE_SAVE";
+   ObjectNode payload=mapper.createObjectNode();payload.put("stateVersion",state.stateVersion);
+   payload.put("layerCount",data.path("objects").size());
+   entry.payloadJson=payload;
+   histories.save(entry);
+  }
   return new SaveStateResponse(id,state.updatedAt,state.stateVersion);
  }
  private void validateState(JsonNode data){
   if(data==null||!data.isObject()||!data.path("schemaVersion").canConvertToInt()||data.path("schemaVersion").asInt()<1
-    ||!data.path("canvas").isObject()||!data.path("canvas").path("width").canConvertToInt()||data.path("canvas").path("width").asInt()<1 || data.path("canvas").path("width").asInt()>12000
-    ||!data.path("canvas").path("height").canConvertToInt()||data.path("canvas").path("height").asInt()<1 || data.path("canvas").path("height").asInt()>12000
+    ||!data.path("canvas").isObject()||!data.path("canvas").path("width").canConvertToInt()||data.path("canvas").path("width").asInt()<1||data.path("canvas").path("width").asInt()>12000
+    ||!data.path("canvas").path("height").canConvertToInt()||data.path("canvas").path("height").asInt()<1||data.path("canvas").path("height").asInt()>12000
     ||!data.path("objects").isArray()||data.has("activeFilters")&&!data.path("activeFilters").isArray())
       throw new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Invalid EditorState schema");
   try {if(mapper.writeValueAsBytes(data).length>2_000_000)throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE,"FILE_TOO_LARGE","Editor state too large");}
   catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_REQUEST","Invalid EditorState JSON");}
+ }
+ private static final Set<String> ASSET_KEYS=Set.of("assetId","sourceAssetId","maskAssetId","backgroundAssetId","thumbnailAssetId","derivedFromAssetId");
+ private void validateAssetRefs(JsonNode data,long projectId){
+  Set<Long> checked=new HashSet<>();
+  checkNode(data,projectId,checked);
+ }
+ private void checkNode(JsonNode node,long projectId,Set<Long> checked){
+  if(node==null||node.isNull())return;
+  if(node.isObject()){
+   var fields=node.fields();
+   while(fields.hasNext()){
+    var entry=fields.next();
+    if(ASSET_KEYS.contains(entry.getKey()) && !entry.getValue().isNull()){
+     if(!entry.getValue().isIntegralNumber()||!entry.getValue().canConvertToLong()||entry.getValue().asLong()<1)
+      throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_ASSET_REFERENCE","Invalid image asset ID");
+     long aid=entry.getValue().asLong();
+     if(checked.add(aid))assets.ownedAssetUrl(aid,access.currentUserId(),projectId);
+    } else checkNode(entry.getValue(),projectId,checked);
+   }
+  }else if(node.isArray())for(JsonNode child:node)checkNode(child,projectId,checked);
  }
  private ProjectResponse response(Project p){
   String thumb=p.thumbnailAssetId==null?null:assets.ownedAssetUrl(p.thumbnailAssetId,p.owner.id,p.id);
