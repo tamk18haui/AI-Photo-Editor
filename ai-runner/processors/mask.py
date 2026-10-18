@@ -11,6 +11,13 @@ def resized_mask(mask: Image.Image, size: tuple[int, int]) -> Image.Image:
     return mask.convert("L").resize(size, Image.Resampling.BILINEAR)
 
 
+def require_source_mask(mask: Image.Image, size: tuple[int,int]) -> Image.Image:
+    """Reject uploaded mask geometry mismatch; inference-resize must be explicit elsewhere."""
+    if mask.size != size:
+        raise RunnerError("MASK_DIMENSION_MISMATCH", "Mask dimensions must equal current source image", 422)
+    return mask.convert("L")
+
+
 def refine(mask: Image.Image, args: dict) -> Image.Image:
     """Smooth mask edges at full resolution using bounded feather and dilation."""
     pixels = number(args.get("feather", 0), 0, 30, "feather")
@@ -27,6 +34,7 @@ def refine(mask: Image.Image, args: dict) -> Image.Image:
 def apply_alpha(image: Image.Image, mask: Image.Image, args: dict) -> Image.Image:
     """Keep original RGB pixels and apply 8-bit alpha from the mask."""
     mode = choice(args.get("outputMode", "TRANSPARENT"), {"TRANSPARENT", "WHITE", "COLOR", "MASK_ONLY"}, "outputMode")
+    # Internal model masks can be resampled; upload/operation boundaries validate masks.
     mask = resized_mask(mask, image.size)
     if mode == "MASK_ONLY": return mask
     result = image.convert("RGBA")
@@ -57,3 +65,5 @@ def replace_background(image: Image.Image, background: Image.Image | None, mask:
         canvas = Image.new("RGBA", image.size, color)
     canvas.alpha_composite(subject)
     return canvas.convert("RGB")
+# N4_HYBRID_FULL_V3_PATCHED
+# N4_MASK_GEOMETRY_COMPAT_HOTFIX_20261016
