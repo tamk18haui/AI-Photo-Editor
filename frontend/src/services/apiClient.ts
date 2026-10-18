@@ -8,3 +8,15 @@ export const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+import { authSession } from './authSession';
+
+apiClient.interceptors.request.use((config) => {
+  const token = authSession.getAccessToken();
+
+  if (token) {
+    config.headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return config;
+});
