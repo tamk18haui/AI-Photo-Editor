@@ -1,11 +1,12 @@
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 import { authApi } from '../services/authApi';
 import { authSession } from '../services/authSession';
+import GoogleAuthButton from '../components/GoogleAuthButton';
 
 import {
   ArrowRight,
@@ -49,6 +50,14 @@ export default function LoginPage() {
   const [noticeType, setNoticeType] = useState<NoticeType>('info');
   const [loading, setLoading] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+
+  const onGoogleDone = useCallback(() => {
+    navigate('/projects', { replace: true });
+  }, [navigate]);
+  const onGoogleError = useCallback((message: string) => {
+    setNotice(message);
+    setNoticeType('error');
+  }, []);
 
   const register = mode === 'register';
 
@@ -355,44 +364,7 @@ export default function LoginPage() {
               </p>
 
               {/* GOOGLE */}
-              <button
-                type="button"
-                className="lum-google-btn"
-                disabled={loading}
-                onClick={() =>
-                  showNotice(
-                    'Đăng nhập Google chưa được kết nối với Backend N3.',
-                    'info'
-                  )
-                }
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  aria-hidden="true"
-                >
-                  <path
-                    fill="#4285F4"
-                    d="M21.35 12.24c0-.73-.06-1.43-.19-2.1H12v3.86h5.22a4.47 4.47 0 0 1-1.94 2.94v2.46h3.15c1.84-1.7 2.92-4.2 2.92-7.16Z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 21.75c2.63 0 4.83-.87 6.43-2.35l-3.15-2.46c-.87.59-1.99.94-3.28.94-2.53 0-4.68-1.71-5.45-4H3.31v2.52A9.75 9.75 0 0 0 12 21.75Z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M6.55 13.88a5.85 5.85 0 0 1 0-3.76V7.6H3.31a9.75 9.75 0 0 0 0 8.8l3.24-2.52Z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 6.13c1.43 0 2.7.5 3.7 1.45l2.78-2.78A9.37 9.37 0 0 0 12 2.25 9.75 9.75 0 0 0 3.31 7.6l3.24 2.52c.77-2.29 2.92-3.99 5.45-3.99Z"
-                  />
-                </svg>
-                {register
-                  ? 'Đăng ký với Google'
-                  : 'Đăng nhập với Google'}
-              </button>
+              <GoogleAuthButton onDone={onGoogleDone} onError={onGoogleError} />
 
               <div className="lum-auth-separator">
                 <span>hoặc</span>
@@ -552,17 +524,7 @@ export default function LoginPage() {
                       <Check size={15} />
                       Bảo mật tài khoản
                     </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        showNotice(
-                          'Chức năng quên mật khẩu chưa có API.',
-                          'info'
-                        )
-                      }
-                    >
-                      Quên mật khẩu?
-                    </button>
+                    <Link to="/forgot-password">Quên mật khẩu?</Link>
                   </div>
                 )}
 
