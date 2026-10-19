@@ -30,3 +30,13 @@
 .n1-layer-confirm{padding:9px;background:#fff4f4;border:1px solid #f3cccc;border-radius:8px;font-size:12px}.n1-layer-confirm div{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}.n1-layer-confirm button{border:1px solid #d6cbda;border-radius:6px;padding:6px 10px;background:white;cursor:pointer}.n1-layer-confirm button.danger{background:#bd3131;color:white;border-color:#bd3131}
 .n1-layers-panel button:focus-visible{outline:2px solid #8151d2;outline-offset:2px}
 @media(max-width:1000px){.n1-layers-panel{flex-basis:255px;width:255px;min-width:225px}}
+
+/* Photoshop-like editable objects and typography controls */
+.n1-layer-stage{container-type:inline-size;}
+.n1-creative-object{position:absolute;touch-action:none;user-select:none;min-width:20px;font-family:Arial,sans-serif;font-weight:700;text-shadow:0 1px 3px #0006;line-height:1.2;white-space:pre-wrap}
+.n1-creative-object.selected{outline:2px dashed #9161f1;outline-offset:6px}
+.n1-creative-thumb{width:40px;height:40px;display:grid;place-items:center;background:#efe8fa;border-radius:6px;flex-shrink:0}
+.n1-shape{width:100%;aspect-ratio:1;border:4px solid;border-radius:2px;box-sizing:border-box}
+.n1-shape-circle{border-radius:50%}.n1-shape-ellipse{border-radius:50%;aspect-ratio:1.5}.n1-shape-rounded-rectangle{border-radius:14px}
+.n1-creative-properties textarea{display:block;box-sizing:border-box;width:100%;font:inherit;padding:8px;border-radius:7px;border:1px solid #d6c7e7;resize:vertical;margin-top:6px}
+.n1-creative-properties input[type=color]{margin-top:6px;display:block;width:60px;height:35px}

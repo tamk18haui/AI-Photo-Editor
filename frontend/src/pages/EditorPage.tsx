@@ -42,8 +42,8 @@ const categories: CategoryItem[] = [
     {id:'hair',label:'Chỉnh tóc',status:'soon'},{id:'beauty-ai',label:'Chỉnh bằng AI',status:'soon'} ] },
   { id:'design',label:'Thiết kế',icon:Layers3,children:[
     {id:'text',label:'Văn bản',icon:Type},
-    {id:'sticker',label:'Nhãn / Sticker',icon:Sticker,status:'soon'},
-    {id:'add-image',label:'Thêm ảnh',icon:ImagePlus,status:'soon'},
+    {id:'sticker',label:'Nhãn / Sticker',icon:Sticker},
+    {id:'add-image',label:'Thêm ảnh',icon:ImagePlus},
     {id:'photo-collage',label:'Ghép ảnh',icon:Grid2X2,status:'soon'},
     {id:'shape',label:'Hình khối'},
     {id:'drawing',label:'Vẽ tự do',icon:Brush,status:'soon'} ] },
@@ -61,7 +61,7 @@ const categories: CategoryItem[] = [
     {id:'glow',label:'Glow',status:'soon'},{id:'grain',label:'Hạt film',status:'soon'},
     {id:'blur-effect',label:'Làm mờ nghệ thuật',status:'soon'},{id:'light-leak',label:'Ánh sáng rò',status:'soon'} ] },
   { id:'background',label:'Nền',icon:ImageIcon,children:[
-    {id:'bg-color',label:'Nền màu',status:'soon'},{id:'bg-image',label:'Nền hình ảnh',status:'soon'},
+    {id:'bg-color',label:'Nền màu'},{id:'bg-image',label:'Nền hình ảnh'},
     {id:'bg-ai',label:'Đổi nền AI',status:'soon'},{id:'n4-removeBg',label:'Tách nền trong suốt',icon:WandSparkles} ] },
   { id:'ai',label:'Chỉnh theo AI',icon:WandSparkles,children:[
     {id:'prompt',label:'Chỉnh ảnh bằng câu lệnh',icon:WandSparkles} ] },
@@ -113,6 +113,8 @@ export default function EditorPage(){
   const [selected,setSelected]=useState('crop');
   const [image,setImage]=useState<string|null>(null);
   const [layersOpen,setLayersOpen]=useState(true);
+  const [layerCommand,setLayerCommand]=useState<{seq:number;patch:Partial<Edits>}|null>(null);
+  const [creativeCommand,setCreativeCommand]=useState<{seq:number;kind:'text'|'sticker'|'shape';value:string}|null>(null);
   const [canvasSize,setCanvasSize]=useState({width:1024,height:1024});
   const [geminiOpen, setGeminiOpen] = useState(false);
   const [fileName,setFileName]=useState('Chưa có ảnh');
@@ -269,6 +271,7 @@ export default function EditorPage(){
 
   useEffect(()=>()=>{if(image?.startsWith('blob:'))URL.revokeObjectURL(image)},[image]);
   const mutate=(patch:Partial<Edits>)=>{
+    if(layersOpen) setLayerCommand({seq:Date.now()+Math.random(),patch});
     setEdits(prev=>{
       const next={...prev,...patch};
       if(JSON.stringify(prev)===JSON.stringify(next))return prev;
@@ -398,7 +401,7 @@ export default function EditorPage(){
         url:resultAsset.url,name:resultAsset.originalFileName||`AI ${job.jobId}`,
         visible:true,locked:false,opacity:100,x:0,y:0,width:100};
       // Preserve N3 objects/history; only touch N1's separate composition slot.
-      await editorStateApi.save(projectId,{...latest,n1Composition:{version:1,layers:[...base,newLayer]},
+      await editorStateApi.save(projectId,{...latest,n1Composition:{...(typeof latest.n1Composition==='object' && latest.n1Composition?latest.n1Composition as Record<string,unknown>:{}),version:1,layers:[...base,newLayer]},
         n1Editor:{...previous,activeAssetId:job.resultAssetId,
         edits:initial,past:[],future:[],updatedAt:new Date().toISOString()}});
       try{await assetApi.setProjectThumbnail(projectId,job.resultAssetId)}
@@ -428,6 +431,8 @@ export default function EditorPage(){
   };
   const handleTool=(id:string)=>{
     setSelected(id);
+    if(id==='add-image'){setLayersOpen(true);setStatus('Chọn nút Thêm ảnh trong bảng Layers để tải ảnh mới.');return;}
+    if(id==='bg-color'||id==='bg-image'){setLayersOpen(true);setStatus('Mở Nền ảnh trong bảng Layers bên phải để thay nền.');return;}
     if(N4_TOOLS[id])return;
     if(id==='prompt'){if(image)setGeminiOpen(true);else setStatus('Hãy mở một ảnh trước khi dùng Gemini');return;}
     if(id==='rotate')mutate({rotation:(edits.rotation+90)%360});
@@ -487,7 +492,9 @@ export default function EditorPage(){
                   ]);
 
                   setActiveObjectId(id);
-                  setStatus('Đã thêm văn bản vào ảnh');
+                  setCreativeCommand({seq:Date.now()+Math.random(),kind:'text',value:text});
+                  setLayersOpen(true);
+                  setStatus('Đã thêm văn bản. Nhấp để chọn và kéo chữ trực tiếp trên canvas.');
                 }}
               />
             </div>
@@ -514,7 +521,9 @@ export default function EditorPage(){
                   ]);
 
                   setActiveObjectId(id);
-                  setStatus('Đã thêm hình khối vào ảnh');
+                  setCreativeCommand({seq:Date.now()+Math.random(),kind:'shape',value:shape});
+                  setLayersOpen(true);
+                  setStatus('Đã thêm hình khối. Có thể kéo, đổi màu và kích thước trên canvas.');
                 }}
               />
             </div>
@@ -543,7 +552,9 @@ export default function EditorPage(){
                   ]);
 
                   setActiveObjectId(id);
-                  setStatus('Đã thêm sticker vào ảnh');
+                  setCreativeCommand({seq:Date.now()+Math.random(),kind:'sticker',value:sticker.emoji});
+                  setLayersOpen(true);
+                  setStatus('Đã thêm sticker. Có thể kéo, thu phóng và xóa như một layer.');
                 }}
               />
             </div>
@@ -556,7 +567,9 @@ export default function EditorPage(){
           <div className={`lv3-canvas-space ${layersOpen?'n1-with-layers':''}`}>
             {projectReady&&<LayersWorkspace projectId={projectId} ready={projectReady} originalAssetId={activeAssetId} originalUrl={image}
               originalName={fileName} canvasWidth={canvasSize.width} canvasHeight={canvasSize.height}
-              sourceDocument={projectState} active={layersOpen} onStatus={setStatus}/>}
+              sourceDocument={projectState} active={layersOpen} onStatus={setStatus}
+              editCommand={layerCommand} creativeCommand={creativeCommand}
+              onSelectImageEdits={v=>setEdits({...initial,...v} as Edits)}/>}
             {!layersOpen && (image ? (
               <div className="lv3-image-stage">
                 <img
