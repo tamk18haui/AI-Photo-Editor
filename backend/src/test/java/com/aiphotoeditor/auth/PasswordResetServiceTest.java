@@ -75,8 +75,8 @@ class PasswordResetServiceTest {
         entry.expiresAt = Instant.now().plusSeconds(600);
         when(tokenService.hash("raw")).thenReturn("sha256");
         when(resetTokens.findForUpdate("sha256")).thenReturn(Optional.of(entry));
-        when(encoder.encode("newPassword123")).thenReturn("new-bcrypt-hash");
-        service.resetPassword("raw", "newPassword123");
+        when(encoder.encode("NewPassword123!")).thenReturn("new-bcrypt-hash");
+        service.resetPassword("raw", "NewPassword123!");
         assertEquals("new-bcrypt-hash", user.passwordHash);
         verify(resetTokens).invalidateUnusedForUser(eq(7L), any(Instant.class));
         verify(refreshTokens).revokeAll(eq(7L), any(Instant.class));
@@ -89,7 +89,7 @@ class PasswordResetServiceTest {
         entry.expiresAt = Instant.now().minusSeconds(1);
         when(tokenService.hash("expired")).thenReturn("expired-hash");
         when(resetTokens.findForUpdate("expired-hash")).thenReturn(Optional.of(entry));
-        assertThrows(ApiException.class, () -> service.resetPassword("expired", "newPassword123"));
+        assertThrows(ApiException.class, () -> service.resetPassword("expired", "NewPassword123!"));
         verifyNoInteractions(encoder, refreshTokens);
     }
 
@@ -101,6 +101,6 @@ class PasswordResetServiceTest {
         entry.usedAt = Instant.now();
         when(tokenService.hash("used")).thenReturn("used-hash");
         when(resetTokens.findForUpdate("used-hash")).thenReturn(Optional.of(entry));
-        assertThrows(ApiException.class, () -> service.resetPassword("used", "newPassword123"));
+        assertThrows(ApiException.class, () -> service.resetPassword("used", "NewPassword123!"));
     }
 }

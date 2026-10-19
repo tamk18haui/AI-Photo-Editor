@@ -6,6 +6,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { authSession } from '../services/authSession';
 import GoogleAuthButton from './GoogleAuthButton';
+import PasswordStrengthHint from './PasswordStrengthHint';
+import { isStrongPassword } from '../utils/passwordPolicy';
 
 type Profile = { id: number; email: string; displayName: string | null; avatarUrl: string | null };
 type View = 'menu' | 'password' | 'profile' | 'google';
@@ -61,6 +63,7 @@ export default function AccountMenu() {
     if (!currentPassword) return setMessage('Vui lòng nhập mật khẩu hiện tại.');
     if (newPassword.length < 8) return setMessage('Mật khẩu mới phải có ít nhất 8 ký tự.');
     if (newPassword.length > 200) return setMessage('Mật khẩu mới không được vượt quá 200 ký tự.');
+    if (!isStrongPassword(newPassword)) return setMessage('Mật khẩu mới cần chữ hoa, chữ thường, chữ số và ký tự đặc biệt.');
     if (currentPassword === newPassword) return setMessage('Mật khẩu mới không được trùng với mật khẩu hiện tại.');
     if (newPassword !== confirmPassword) return setMessage('Xác nhận mật khẩu mới không khớp.');
     setLoading(true);
@@ -78,6 +81,8 @@ export default function AccountMenu() {
         setMessage('Mật khẩu mới không được trùng với mật khẩu cũ.');
       else if (data?.code === 'GOOGLE_PASSWORD_NOT_SET' || data?.message === 'Password login not configured for this account')
         setMessage('Tài khoản Google chưa tạo mật khẩu riêng. Vui lòng đăng nhập Google.');
+      else if (data?.code === 'PASSWORD_TOO_WEAK')
+        setMessage('Mật khẩu mới cần 8–200 ký tự, chữ hoa, chữ thường, số và ký tự đặc biệt.');
       else if (data?.code === 'VALIDATION_ERROR' || status === 400)
         setMessage('Dữ liệu mật khẩu chưa hợp lệ (8–200 ký tự).');
       else if (status === 401) setMessage('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
@@ -156,6 +161,7 @@ export default function AccountMenu() {
           <input style={fieldStyle} type={showPassword?'text':'password'} autoComplete="new-password" minLength={8} maxLength={200}
             value={newPassword} onChange={e=>setNewPassword(e.target.value)} required />
         </label>
+        <PasswordStrengthHint password={newPassword} confirm={confirmPassword} />
         <label style={{fontSize:13,fontWeight:600}}>Xác nhận mật khẩu mới
           <input style={fieldStyle} type={showPassword?'text':'password'} autoComplete="new-password"
             value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required />
@@ -163,7 +169,8 @@ export default function AccountMenu() {
         <button type="button" onClick={()=>setShowPassword(v=>!v)} style={{...actionStyle,justifyContent:'center'}}>
           {showPassword?<EyeOff size={16}/>:<Eye size={16}/>} {showPassword?'Ẩn mật khẩu':'Hiện mật khẩu'}
         </button>
-        <button type="submit" disabled={loading} style={{...actionStyle,justifyContent:'center',background:'#5c46d8',color:'white'}}>
+        <button type="submit" disabled={loading || !isStrongPassword(newPassword) || newPassword !== confirmPassword || !currentPassword || currentPassword === newPassword}
+          style={{...actionStyle,justifyContent:'center',background:'#5c46d8',color:'white',opacity:loading || !isStrongPassword(newPassword) || newPassword !== confirmPassword || !currentPassword || currentPassword === newPassword ? 0.55 : 1}}>
           {loading?'Đang xử lý...':'Lưu mật khẩu mới'}
         </button>
         <Link to="/forgot-password" onClick={close} style={{fontSize:13,textAlign:'center'}}>Quên mật khẩu hiện tại?</Link>

@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { authApi } from '../services/authApi';
+import PasswordStrengthHint from '../components/PasswordStrengthHint';
+import { isStrongPassword } from '../utils/passwordPolicy';
 import '../styles/auth-modern.css';
 
 export default function ResetPasswordPage() {
@@ -18,8 +20,7 @@ export default function ResetPasswordPage() {
   }, [token]);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setNotice('');
-    if (password.length < 8) return setNotice('Mật khẩu mới phải có ít nhất 8 ký tự.');
-    if (password.length > 200) return setNotice('Mật khẩu mới tối đa 200 ký tự.');
+    if (!isStrongPassword(password)) return setNotice('Mật khẩu cần 8-200 ký tự, có chữ hoa, chữ thường, chữ số và ký tự đặc biệt.');
     if (password !== confirm) return setNotice('Xác nhận mật khẩu không khớp.');
     setBusy(true);
     try {
@@ -45,6 +46,7 @@ export default function ResetPasswordPage() {
             <input type={show?'text':'password'} required minLength={8} maxLength={200}
               autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} />
           </label>
+          <PasswordStrengthHint password={password} confirm={confirm} />
           <label className="lum-field"><span>Xác nhận mật khẩu mới</span>
             <input type={show?'text':'password'} required autoComplete="new-password"
               value={confirm} onChange={e=>setConfirm(e.target.value)} />

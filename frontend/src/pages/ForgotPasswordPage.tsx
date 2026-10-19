@@ -19,6 +19,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { authApi } from '../services/authApi';
+import PasswordStrengthHint from '../components/PasswordStrengthHint';
+import { isStrongPassword } from '../utils/passwordPolicy';
 import '../styles/auth-modern.css';
 import '../styles/auth-otp.css';
 
@@ -103,8 +105,8 @@ export default function ForgotPasswordPage() {
       setError(true);
       return;
     }
-    if (password.length < 8 || password.length > 200) {
-      setNotice('Mật khẩu mới phải có từ 8 đến 200 ký tự.');
+    if (!isStrongPassword(password)) {
+      setNotice('Mật khẩu cần 8-200 ký tự, có chữ hoa, chữ thường, chữ số và ký tự đặc biệt.');
       setError(true);
       return;
     }
@@ -265,6 +267,8 @@ export default function ForgotPasswordPage() {
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
+
+                    <PasswordStrengthHint password={password} confirm={confirm} />
 
                     <label htmlFor="lum-reset-confirm" className="lum-otp-label">Xác nhận mật khẩu mới</label>
                     <div className="lum-otp-field">

@@ -83,13 +83,13 @@ class PasswordResetOtpServiceTest {
         assertTrue(m.find());
         String actualCode = m.group();
         when(otps.findTopByUser_IdOrderByCreatedAtDescIdDesc(3L)).thenReturn(Optional.of(saved.getValue()));
-        when(encoder.encode("passwordNEW123")).thenReturn("new-hash");
-        assertTrue(service.resetUsingOtp("member@example.org", actualCode, "passwordNEW123"));
+        when(encoder.encode("PasswordNEW123!")).thenReturn("new-hash");
+        assertTrue(service.resetUsingOtp("member@example.org", actualCode, "PasswordNEW123!"));
         assertEquals("new-hash", user.passwordHash);
         assertNotNull(saved.getValue().usedAt);
         verify(refresh).revokeAll(eq(3L), any(Instant.class));
         verify(legacy).invalidateUnusedForUser(eq(3L), any(Instant.class));
-        assertFalse(service.resetUsingOtp("member@example.org", actualCode, "passwordNEW123"));
+        assertFalse(service.resetUsingOtp("member@example.org", actualCode, "PasswordNEW123!"));
     }
 
     @Test
@@ -99,7 +99,7 @@ class PasswordResetOtpServiceTest {
         entry.user=user; entry.codeHash="a".repeat(64); entry.nonce="b".repeat(32);
         entry.expiresAt=Instant.now().plusSeconds(100);
         when(otps.findTopByUser_IdOrderByCreatedAtDescIdDesc(3L)).thenReturn(Optional.of(entry));
-        assertFalse(service.resetUsingOtp("member@example.org", "000000", "passwordNEW123"));
+        assertFalse(service.resetUsingOtp("member@example.org", "000000", "PasswordNEW123!"));
         assertEquals(1, entry.attemptCount);
         verifyNoInteractions(encoder, refresh);
     }
@@ -111,7 +111,7 @@ class PasswordResetOtpServiceTest {
         entry.user=user; entry.codeHash="a".repeat(64); entry.nonce="b".repeat(32);
         entry.expiresAt=Instant.now().plusSeconds(100);
         when(otps.findTopByUser_IdOrderByCreatedAtDescIdDesc(3L)).thenReturn(Optional.of(entry));
-        for(int i=0;i<5;i++) assertFalse(service.resetUsingOtp("member@example.org", "000000", "passwordNEW123"));
+        for(int i=0;i<5;i++) assertFalse(service.resetUsingOtp("member@example.org", "000000", "PasswordNEW123!"));
         assertEquals(5, entry.attemptCount);
         assertNotNull(entry.usedAt);
         verifyNoInteractions(encoder, refresh);
@@ -124,7 +124,7 @@ class PasswordResetOtpServiceTest {
         entry.user=user; entry.codeHash="a".repeat(64); entry.nonce="b".repeat(32);
         entry.expiresAt=Instant.now().minusSeconds(1);
         when(otps.findTopByUser_IdOrderByCreatedAtDescIdDesc(3L)).thenReturn(Optional.of(entry));
-        assertFalse(service.resetUsingOtp("member@example.org", "000000", "passwordNEW123"));
+        assertFalse(service.resetUsingOtp("member@example.org", "000000", "PasswordNEW123!"));
         assertEquals(0, entry.attemptCount);
     }
 

@@ -120,6 +120,7 @@ public class PasswordResetOtpService {
      */
     @Transactional
     public boolean resetUsingOtp(String rawEmail, String code, String newPassword) {
+        PasswordPolicy.requireValid(newPassword);
         if (code == null || !code.matches("[0-9]{6}")) return false;
         var found = users.findByEmailIgnoreCase(rawEmail.strip().toLowerCase(Locale.ROOT));
         if (found.isEmpty() || found.get().passwordHash == null) return false;
