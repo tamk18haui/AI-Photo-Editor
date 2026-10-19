@@ -41,9 +41,9 @@ public class UserService {
  @Transactional
  public void changePassword(ChangePasswordRequest req){
   User u=require(current.id());
-  if(u.passwordHash==null)throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_REQUEST","Password login not configured for this account");
+  if(u.passwordHash==null)throw new ApiException(HttpStatus.BAD_REQUEST,"GOOGLE_PASSWORD_NOT_SET","Password login not configured for this account");
   if(!encoder.matches(req.currentPassword(),u.passwordHash)) throw new ApiException(HttpStatus.BAD_REQUEST,"AUTH_INVALID_CREDENTIALS","Current password incorrect");
-  if(encoder.matches(req.newPassword(),u.passwordHash))throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_REQUEST","New password must differ");
+  if(encoder.matches(req.newPassword(),u.passwordHash))throw new ApiException(HttpStatus.BAD_REQUEST,"PASSWORD_SAME_AS_CURRENT","New password must differ");
   u.passwordHash=encoder.encode(req.newPassword());
   tokens.revokeAll(u.id,Instant.now());
  }

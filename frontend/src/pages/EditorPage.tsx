@@ -10,12 +10,12 @@ import {
   Redo2, RotateCcw, RotateCw, Save, SlidersHorizontal,
   Sparkles, Sticker, Sun, Type, Undo2, WandSparkles, ZoomIn, ZoomOut,
 } from 'lucide-react';
+import GeminiChat from '../features/gemini/GeminiChat';
 import './editor-modern.css';
 
 import TextTool from '../features/editor/creative/text/TextTool';
 import ShapeTool, { type ShapeType } from '../features/editor/creative/shapes/ShapeTool';
 import StickerTool, { type StickerItem } from '../features/editor/creative/stickers/StickerTool';
-import GeminiChat from '../features/gemini/GeminiChat';
 type Category = 'template' | 'edit' | 'beauty' | 'design' | 'remove' | 'filters' | 'adjust' | 'effects' | 'background' | 'ai';
 type ToolItem = { id: string; label: string; status?: 'soon'; icon?: typeof Sparkles };
 type CategoryItem = { id: Category; label: string; icon: typeof Sparkles; children: ToolItem[] };
@@ -55,7 +55,7 @@ const categories: CategoryItem[] = [
     {id:'bg-color',label:'Nền màu',status:'soon'},{id:'bg-image',label:'Nền hình ảnh',status:'soon'},
     {id:'bg-ai',label:'Đổi nền AI',status:'soon'} ] },
   { id:'ai',label:'Chỉnh theo AI',icon:WandSparkles,children:[
-    {id:'prompt',label:'Nhập yêu cầu AI',icon:WandSparkles,status:'soon'} ] },
+    {id:'prompt',label:'Chỉnh ảnh bằng câu lệnh',icon:WandSparkles} ] },
 ];
 
 const presets = [
@@ -107,21 +107,8 @@ export default function EditorPage(){
   const [past,setPast]=useState<Edits[]>([]);
   const [future,setFuture]=useState<Edits[]>([]);
   const [status,setStatus]=useState('Sẵn sàng chỉnh sửa ảnh');
-  const [prompt,setPrompt]=useState('');
   const [isBusy,setBusy]=useState(false);
   const currentCategory=categories.find(x=>x.id===active)!;
-  const currentImageForGemini = async (): Promise<Blob> => {
-    if (!image) {
-      throw new Error('Vui lòng chọn ảnh trước khi sử dụng Gemini.');
-    }
-
-    const response = await fetch(image);
-    if (!response.ok) {
-      throw new Error('Không thể đọc ảnh hiện tại.');
-    }
-
-    return await response.blob();
-  };
 
   useEffect(()=>()=>{if(image?.startsWith('blob:'))URL.revokeObjectURL(image)},[image]);
   const mutate=(patch:Partial<Edits>)=>{
@@ -144,6 +131,29 @@ export default function EditorPage(){
     const p=presets.find(p=>p.id===edits.preset)?.filter??'none';
     return `brightness(${edits.brightness*edits.lux/10000}) contrast(${edits.contrast}%) saturate(${edits.saturation}%) ${p==='none'?'':p} blur(${edits.blur}px)`;
   };
+  const currentImageForGemini=async ():Promise<Blob>=>{
+    if(!image)throw new Error('Hãy chọn ảnh trước.');
+    return new Promise<Blob>((resolve,reject)=>{
+      const img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=()=>{
+        const sideways=Math.abs(edits.rotation/90)%2===1;
+        const canvas=document.createElement('canvas');
+        canvas.width=sideways?img.naturalHeight:img.naturalWidth;
+        canvas.height=sideways?img.naturalWidth:img.naturalHeight;
+        const context=canvas.getContext('2d');
+        if(!context){reject(new Error('Không thể dựng ảnh'));return;}
+        context.translate(canvas.width/2,canvas.height/2);
+        context.rotate(edits.rotation*Math.PI/180);
+        context.scale(edits.flipped?-1:1,1);
+        context.filter=adjustedFilter();
+        context.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);
+        canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Không thể xuất ảnh hiện tại')),'image/png');
+      };
+      img.onerror=()=>reject(new Error('Không tải được ảnh hiện tại'));
+      img.src=image;
+    });
+  };
   const saveTemporary=()=>{
     try{sessionStorage.setItem('lumina-editor-settings',JSON.stringify({edits, fileName, savedAt:new Date().toISOString()}));setStatus('Đã lưu tạm thiết lập chỉnh sửa trong phiên này; ảnh gốc chưa được lưu');}
     catch{setStatus('Không thể lưu tạm trong trình duyệt');}
@@ -164,14 +174,16 @@ export default function EditorPage(){
   };
   const handleTool=(id:string)=>{
     setSelected(id);
+
         if (id === 'prompt') {
-      if (image) {
-        setGeminiOpen(true);
-      } else {
-        setStatus('Vui lòng chọn ảnh trước khi sử dụng Gemini.');
-      }
-      return;
-    }
+          if (image) {
+            setGeminiOpen(true);
+          } else {
+            setStatus('Vui lòng chọn ảnh trước khi sử dụng Gemini.');
+          }
+          return;
+        }
+
     if(id==='rotate')mutate({rotation:(edits.rotation+90)%360});
     if(id==='flip')mutate({flipped:!edits.flipped});
     if(id==='auto')mutate({brightness:108,contrast:108,saturation:110,lux:105});
@@ -203,13 +215,38 @@ export default function EditorPage(){
           <div className="lv3-tool-grid">{currentCategory.children.map(t=>{const Icon=t.icon||WandSparkles;return <button key={t.id} className={`lv3-tool-item ${selected===t.id?'selected':''}`} onClick={()=>handleTool(t.id)} title={t.label}><span className="lv3-tool-symbol"><Icon size={21}/></span><span>{t.label}</span>{t.status==='soon'&&<small>SAU</small>}</button>})}</div>
           {(active==='edit'||active==='adjust')&&<div className="lv3-settings"><div className="lv3-heading"><SlidersHorizontal size={17}/> Tinh chỉnh trực tiếp</div>{active==='edit'&&<div className="lv3-ratios">{['Tự do','1:1','4:3','9:16','16:9'].map(r=><button key={r} className={edits.ratio===r?'chosen':''} onClick={()=>mutate({ratio:r})}>{r}</button>)}</div>}{slider('Độ sáng','brightness',40,160)}{slider('Tương phản','contrast',40,160)}{slider('Bão hòa','saturation',0,200)}{active==='adjust'&&<>{slider('Lux','lux',50,150)}{slider('Làm mờ','blur',0,12,'px')}</>}</div>}
           {active==='filters'&&<div className="lv3-filters-grid">{presets.map(p=><button key={p.id} onClick={()=>handleTool(p.id)} className={edits.preset===p.id?'chosen':''}><span className="lv3-filter-thumb">{image?<img src={image} alt="" style={{filter:p.filter}}/>:<Palette size={30}/>}</span><span>{p.name}</span></button>)}</div>}
-          {active==='ai'&&<div className="lv3-ai-box"><strong><Sparkles size={17}/> Nhập mô tả chỉnh sửa</strong><textarea value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={1500} rows={6} placeholder="Ví dụ: Làm sáng ảnh, xóa vật thể phía sau và đổi nền thành bãi biển..."/><button onClick={()=>setStatus('Chỉnh sửa bằng ngôn ngữ cần Natural Edit API từ Backend. Prompt chưa được gửi đi.')} disabled={!prompt.trim()}><WandSparkles size={17}/> Tạo kế hoạch AI</button><p>Hiện chưa kết nối Gemini / Natural Edit, nên không tự thực thi yêu cầu.</p></div>}
+
+          {active === 'ai' && (
+            <div className="lv3-ai-box">
+              <strong>
+                <Sparkles size={17} /> Gemini Chat
+              </strong>
+              <p>
+                Chỉnh ảnh bằng câu lệnh. Có xem trước và Apply;
+                không dùng Local AI N4.
+              </p>
+              <button
+                type="button"
+                disabled={!image}
+                onClick={() => setGeminiOpen(true)}
+              >
+                <WandSparkles size={17} /> Mở Gemini Chat
+              </button>
+            </div>
+          )}
+
+          {active === 'beauty' && (
+            <p className="lv3-soon-note">
+              Các công cụ làm đẹp sẽ được tích hợp tại đây.
+            </p>
+          )}
+
           {active === 'design' && selected === 'text' && (
-              <div className="lv3-settings">
-                <div className="lv3-heading">
-                  <Type size={17} /> Thêm văn bản
-                </div>
-                <TextTool
+            <div className="lv3-settings">
+              <div className="lv3-heading">
+                <Type size={17} /> Thêm văn bản
+              </div>
+              <TextTool
                 onAddText={(text) => {
                   const id = `${Date.now()}-${Math.random()}`;
 
@@ -229,15 +266,15 @@ export default function EditorPage(){
                   setActiveObjectId(id);
                   setStatus('Đã thêm văn bản vào ảnh');
                 }}
-                />
-              </div>
-            )}
+              />
+            </div>
+          )}
 
-            {active === 'design' && selected === 'shape' && (
-              <div className="lv3-settings">
-                <div className="lv3-heading">Thêm hình khối</div>
-                <ShapeTool
-                  onAddShape={(shape) => {
+          {active === 'design' && selected === 'shape' && (
+            <div className="lv3-settings">
+              <div className="lv3-heading">Thêm hình khối</div>
+              <ShapeTool
+                onAddShape={(shape) => {
                   const id = `${Date.now()}-${Math.random()}`;
 
                   setShapeItems((items) => [
@@ -254,19 +291,19 @@ export default function EditorPage(){
                   ]);
 
                   setActiveObjectId(id);
-                    setStatus('Đã thêm hình khối vào ảnh');
-                  }}
-                />
-              </div>
-            )}
+                  setStatus('Đã thêm hình khối vào ảnh');
+                }}
+              />
+            </div>
+          )}
 
-            {active === 'design' && selected === 'sticker' && (
-              <div className="lv3-settings">
-                <div className="lv3-heading">
-                  <Sticker size={17} /> Thêm sticker
-                </div>
-                <StickerTool
-                  onAddSticker={(sticker) => {
+          {active === 'design' && selected === 'sticker' && (
+            <div className="lv3-settings">
+              <div className="lv3-heading">
+                <Sticker size={17} /> Thêm sticker
+              </div>
+              <StickerTool
+                onAddSticker={(sticker) => {
                   const id = `${Date.now()}-${Math.random()}`;
 
                   setStickerItems((items) => [
@@ -283,11 +320,12 @@ export default function EditorPage(){
                   ]);
 
                   setActiveObjectId(id);
-                    setStatus('Đã thêm sticker vào ảnh');
-                  }}
-                />
-              </div>
-        )}
+                  setStatus('Đã thêm sticker vào ảnh');
+                }}
+              />
+            </div>
+          )}
+
           <div className="lv3-toolbox-footer"><CircleHelp size={16}/> Công cụ có nhãn SAU chưa thực thi.</div>
         </section>
         <section className="lv3-center">
@@ -380,13 +418,18 @@ export default function EditorPage(){
         originalPreview={image}
         createSource={currentImageForGemini}
         onApply={(file) => {
-          const url = URL.createObjectURL(file);
-          setImage(url);
-          setStatus('Đã áp dụng ảnh Gemini vào Editor.');
+          setImage(URL.createObjectURL(file));
+          setFileName('gemini-edited.png');
+          setEdits(initial);
+          setPast([]);
+          setFuture([]);
+          setStatus(
+            'Đã áp dụng ảnh Gemini vào Editor. Dùng Xuất ảnh để tải về.'
+          );
           setGeminiOpen(false);
         }}
         onClose={() => setGeminiOpen(false)}
       />
     )}
-  </div>;
+</div>;
 }

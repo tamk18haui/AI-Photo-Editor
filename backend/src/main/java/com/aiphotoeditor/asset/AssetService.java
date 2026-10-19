@@ -140,6 +140,10 @@ public class AssetService {
     /** Function: Delete only a currently-owned asset and its Cloudinary resource. */
     public void delete(long projectId, long assetId) {
         Asset asset = requireMine(projectId, assetId);
+        // N4 owned usage guard: N3 must also guard History/Revision references before any deletion.
+        if (repository.existsByDerivedFromAssetId(assetId) || repository.countAiJobReferences(assetId) > 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "ASSET_IN_USE", "Asset is referenced by derived assets or AI jobs");
+        }
         cloudinary.delete(asset.cloudinaryPublicId);
         repository.delete(asset);
     }
@@ -173,3 +177,4 @@ public class AssetService {
         return new ApiException(HttpStatus.BAD_REQUEST, code, message);
     }
 }
+// N4_HYBRID_FULL_V3_PATCHED

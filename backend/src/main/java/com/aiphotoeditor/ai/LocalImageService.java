@@ -52,7 +52,20 @@ public class LocalImageService {
     /** Function: Get precise Face Landmarker coordinates for a validated project asset. */
     public JsonNode landmarks(long projectId, long assetId) {
         var owned = assets.requireMine(projectId, assetId);
-        return runner.landmarks(cloudinary.download(owned));
+        // N4_FACE_STUDIO_V3: return the canonical faceIndex and dimensions.
+        JsonNode raw = runner.faceStudioLandmarks(cloudinary.download(owned));
+        if (!raw.path("faces").isArray() || raw.path("imageWidth").asInt(-1) <= 0 ||
+            raw.path("imageHeight").asInt(-1) <= 0) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "FACE_LANDMARKS_INVALID",
+                                   "Invalid Face Landmarks response");
+        }
+        ObjectNode dto = mapper.createObjectNode();
+        dto.put("projectId", projectId);
+        dto.put("assetId", assetId);
+        dto.set("faces", raw.get("faces"));
+        dto.put("imageWidth", raw.path("imageWidth").asInt());
+        dto.put("imageHeight", raw.path("imageHeight").asInt());
+        return dto;
     }
 
     /** Function: Detect face rectangles for the requested owned project image. */

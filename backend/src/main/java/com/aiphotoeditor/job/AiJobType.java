@@ -17,7 +17,8 @@ public enum AiJobType {
     REMOVE_OBJECT("remove-object"),
     INPAINT("inpaint"),
     FACE_PARSING("face-parsing"),
-    FACE_RESTORE("face-restore");
+    FACE_RESTORE("face-restore"),
+    MAKEUP("makeup");
 
     private final String runnerOperation;
 
@@ -35,3 +36,4 @@ public enum AiJobType {
         return this == SMART_SELECTION || this == REFINE_MASK || this == FACE_PARSING;
     }
 }
+// N4_HYBRID_FULL_V3_PATCHED

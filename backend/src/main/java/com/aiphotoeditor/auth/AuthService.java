@@ -51,6 +51,9 @@ public class AuthService {
  }
  @Transactional
  public AuthResponse issue(User user){
+  user = org.hibernate.Hibernate.unproxy(user, User.class);
+  if (user == null || user.id == null)
+    throw new IllegalStateException("Cannot issue token without persisted user ID");
   var refresh=new RefreshToken();refresh.user=user;refresh.createdAt=Instant.now();refresh.expiresAt=jwt.refreshExpiry();
   String raw=jwt.randomRefreshToken();refresh.tokenHash=jwt.hash(raw);tokens.save(refresh);
   return new AuthResponse(jwt.accessToken(user),raw,jwt.accessTtl(),"Bearer",user.id,user.displayName);
