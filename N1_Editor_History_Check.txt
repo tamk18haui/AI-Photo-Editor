@@ -1,0 +1,121 @@
+﻿
+  frontend\src\pages\EditorPage.tsx:9:  CircleHelp, Cloud, Crop, Download, Eraser, Expand,
+  frontend\src\pages\EditorPage.tsx:10:  FlipHorizontal, FolderOpen, Grid2X2, Heart, Image as ImageIcon,
+  frontend\src\pages\EditorPage.tsx:11:  ImagePlus, Layers3, LayoutTemplate, Move, Paintbrush, Palette,
+> frontend\src\pages\EditorPage.tsx:12:  Redo2, RotateCcw, RotateCw, Save, SlidersHorizontal,
+> frontend\src\pages\EditorPage.tsx:13:  Sparkles, Sticker, Sun, Type, Undo2, WandSparkles, ZoomIn, 
+ZoomOut,
+  frontend\src\pages\EditorPage.tsx:14:} from 'lucide-react';
+  frontend\src\pages\EditorPage.tsx:15:import GeminiChat from '../features/gemini/GeminiChat';
+  frontend\src\pages\EditorPage.tsx:16:import './editor-modern.css';
+  frontend\src\pages\EditorPage.tsx:17:
+  frontend\src\pages\EditorPage.tsx:18:type Category = 'template' | 'edit' | 'beauty' | 'design' | 
+'remove' | 'filters' | 'adjust' | 'effects' | 'background' | 'ai';
+  frontend\src\pages\EditorPage.tsx:85:  const [selected,setSelected]=useState('crop');
+  frontend\src\pages\EditorPage.tsx:86:  const [image,setImage]=useState<string|null>(null);
+  frontend\src\pages\EditorPage.tsx:87:  const [fileName,setFileName]=useState('Chưa có ảnh');
+> frontend\src\pages\EditorPage.tsx:88:  const [edits,setEdits]=useState<Edits>(initial);
+  frontend\src\pages\EditorPage.tsx:89:  const [past,setPast]=useState<Edits[]>([]);
+  frontend\src\pages\EditorPage.tsx:90:  const [future,setFuture]=useState<Edits[]>([]);
+  frontend\src\pages\EditorPage.tsx:91:  const [status,setStatus]=useState('Sẵn sàng chỉnh sửa ảnh');
+  frontend\src\pages\EditorPage.tsx:92:  const [isBusy,setBusy]=useState(false);
+  frontend\src\pages\EditorPage.tsx:93:  const [geminiOpen,setGeminiOpen]=useState(false);
+  frontend\src\pages\EditorPage.tsx:103:    let activeRequest=true;
+  frontend\src\pages\EditorPage.tsx:104:    setProjectReady(false);
+  frontend\src\pages\EditorPage.tsx:105:    setProjectName('Đang tải dự án...');
+> frontend\src\pages\EditorPage.tsx:106:    setImage(null);setFileName('Chưa có 
+ảnh');setEdits(initial);setPast([]);setFuture([]);
+  frontend\src\pages\EditorPage.tsx:107:    Promise.all([editorStateApi.project(projectId), 
+editorStateApi.load(projectId)])
+  frontend\src\pages\EditorPage.tsx:108:      .then(async ([meta,document])=>{
+  frontend\src\pages\EditorPage.tsx:109:        if (!activeRequest) return;
+  frontend\src\pages\EditorPage.tsx:110:        setProjectName(meta.name);
+  frontend\src\pages\EditorPage.tsx:111:        setProjectState(document);
+  frontend\src\pages\EditorPage.tsx:133:          const e=d.edits;
+  frontend\src\pages\EditorPage.tsx:134:          if(e && typeof e==='object' && !Array.isArray(e)) {
+  frontend\src\pages\EditorPage.tsx:135:            const patch=e as Partial<Edits>;
+> frontend\src\pages\EditorPage.tsx:136:            setEdits({...initial,...patch});
+  frontend\src\pages\EditorPage.tsx:137:          }
+  frontend\src\pages\EditorPage.tsx:138:        }
+  frontend\src\pages\EditorPage.tsx:139:        setStatus('Đã tải Project và trạng thái chỉnh sửa.');
+  frontend\src\pages\EditorPage.tsx:140:        setProjectReady(true);
+  frontend\src\pages\EditorPage.tsx:141:      })
+  frontend\src\pages\EditorPage.tsx:165:
+  frontend\src\pages\EditorPage.tsx:166:  
+useEffect(()=>()=>{if(image?.startsWith('blob:'))URL.revokeObjectURL(image)},[image]);
+  frontend\src\pages\EditorPage.tsx:167:  const mutate=(patch:Partial<Edits>)=>{
+> frontend\src\pages\EditorPage.tsx:168:    setEdits(prev=>{
+  frontend\src\pages\EditorPage.tsx:169:      const next={...prev,...patch};
+  frontend\src\pages\EditorPage.tsx:170:      if(JSON.stringify(prev)===JSON.stringify(next))return 
+prev;
+  frontend\src\pages\EditorPage.tsx:171:      setPast(items=>[...items.slice(-39),prev]);setFuture([]);
+  frontend\src\pages\EditorPage.tsx:172:      return next;
+  frontend\src\pages\EditorPage.tsx:173:    });
+  frontend\src\pages\EditorPage.tsx:174:  };
+> frontend\src\pages\EditorPage.tsx:175:  const undo=()=>{if(!past.length)return;const 
+prev=past[past.length-1];setPast(x=>x.slice(0,-1));setFuture(x=>[...x,edits]);setEdits(prev);};
+> frontend\src\pages\EditorPage.tsx:176:  const redo=()=>{if(!future.length)return;const 
+next=future[future.length-1];setFuture(x=>x.slice(0,-1));setPast(x=>[...x,edits]);setEdits(next);};
+  frontend\src\pages\EditorPage.tsx:177:  const loadFile=async(event:ChangeEvent<HTMLInputElement>)=>{
+  frontend\src\pages\EditorPage.tsx:178:    const 
+file=event.target.files?.[0];event.target.value='';if(!file)return;
+  frontend\src\pages\EditorPage.tsx:179:    
+if(!['image/jpeg','image/png','image/webp'].includes(file.type)){setStatus('Chỉ hỗ trợ JPG, PNG, 
+WebP');return;}
+  frontend\src\pages\EditorPage.tsx:180:    if(file.size>MAX_BYTES){setStatus('Ảnh vượt quá 
+20MB');return;}
+  frontend\src\pages\EditorPage.tsx:181:    if(!projectReady||assetBusy||projectBusy){setStatus('Hãy 
+chờ Project tải xong trước khi thêm ảnh.');return;}
+  frontend\src\pages\EditorPage.tsx:197:      setImage(uploaded.url);
+  frontend\src\pages\EditorPage.tsx:198:      setActiveAssetId(uploaded.assetId);
+  frontend\src\pages\EditorPage.tsx:199:      setFileName(uploaded.originalFileName||file.name);
+> frontend\src\pages\EditorPage.tsx:200:      setEdits(initial);setPast([]);setFuture([]);
+  frontend\src\pages\EditorPage.tsx:201:      setStatus(thumbnailUpdated?'Đã lưu ảnh và cập nhật ảnh 
+bìa Project.':'Đã lưu ảnh nhưng cập nhật ảnh bìa thất bại. Kiểm tra Network.');
+  frontend\src\pages\EditorPage.tsx:202:    } catch(err) {
+  frontend\src\pages\EditorPage.tsx:203:      setStatus('Không thể lưu ảnh vào Project. Kiểm tra 
+Cloudinary/API trên Network. Ảnh trước vẫn được giữ.');
+  frontend\src\pages\EditorPage.tsx:204:      console.error('Asset upload/save failed',err);
+  frontend\src\pages\EditorPage.tsx:205:    } finally {setAssetBusy(false);}
+  frontend\src\pages\EditorPage.tsx:276:    <div className="lv3-main">
+  frontend\src\pages\EditorPage.tsx:277:      <header className="lv3-topbar">
+  frontend\src\pages\EditorPage.tsx:278:        <div className="lv3-top-left"><button 
+className="lv3-icon-btn" title="Quay về thư viện" onClick={()=>navigate('/projects')}><ArrowLeft 
+size={18}/></button><div 
+className="lv3-project"><strong>{projectName}</strong><small>{fileName}</small></div><span 
+className="lv3-draft-tag">Bản nháp</span></div>
+> frontend\src\pages\EditorPage.tsx:279:        <div className="lv3-top-actions"><button onClick={undo} 
+disabled={!past.length} title="Hoàn tác"><Undo2 size={18}/><span>Hoàn tác</span></button><button 
+onClick={redo} disabled={!future.length} title="Làm lại"><Redo2 size={18}/><span>Làm 
+lại</span></button><span className="lv3-split"/><button onClick={saveTemporary} title="Lưu tạm thiết 
+lập phiên làm việc"><Save size={18}/><span>Lưu tạm</span></button><button onClick={()=>void 
+saveToProject()} disabled={!projectReady||projectBusy} title="Lưu thông số vào MySQL; ảnh chưa được 
+lưu"><Cloud size={18}/><span>{projectBusy?'Đang lưu...':'Lưu Project'}</span></button><button 
+className="lv3-purple-button" onClick={exportImage} disabled={!image||isBusy}><Download size={18}/>Xuất 
+ảnh</button></div>
+  frontend\src\pages\EditorPage.tsx:280:      </header>
+  frontend\src\pages\EditorPage.tsx:281:      <div className="lv3-body">
+  frontend\src\pages\EditorPage.tsx:282:        <section className="lv3-toolbox" aria-label={`Công cụ 
+${currentCategory.label}`}>
+  frontend\src\pages\EditorPage.tsx:283:          <div className="lv3-toolbox-title"><div><small>CÔNG 
+CỤ</small><h2>{currentCategory.label}</h2></div><button className="lv3-icon-btn" title="Đóng bảng công 
+cụ" onClick={()=>setSidebarOpen(false)}><ChevronLeft size={18}/></button></div>
+  frontend\src\pages\EditorPage.tsx:284:          <div 
+className="lv3-tool-grid">{currentCategory.children.map(t=>{const Icon=t.icon||WandSparkles;return 
+<button key={t.id} className={`lv3-tool-item ${selected===t.id?'selected':''}`} 
+onClick={()=>handleTool(t.id)} title={t.label}><span className="lv3-tool-symbol"><Icon 
+size={21}/></span><span>{t.label}</span>{t.status==='soon'&&<small>SAU</small>}</button>})}</div>
+  frontend\src\pages\EditorPage.tsx:303:        // Gemini preview stays local until separately 
+uploaded. Do not associate it with an old asset.
+  frontend\src\pages\EditorPage.tsx:304:        
+setImage(URL.createObjectURL(blob));setFileName('gemini-edited.png');
+  frontend\src\pages\EditorPage.tsx:305:        setActiveAssetId(null);
+> frontend\src\pages\EditorPage.tsx:306:        setEdits(initial);setPast([]);setFuture([]);
+  frontend\src\pages\EditorPage.tsx:307:        setStatus('Đã Apply Gemini trong trình duyệt; cần 
+upload ảnh kết quả vào Project trước khi lưu lâu dài.');
+  frontend\src\pages\EditorPage.tsx:308:        setGeminiOpen(false);
+  frontend\src\pages\EditorPage.tsx:309:      }} onClose={()=>setGeminiOpen(false)}/>}
+  frontend\src\pages\EditorPage.tsx:310:  </div>;
+  frontend\src\pages\EditorPage.tsx:311:}
+
+

@@ -57,3 +57,9 @@ app:
   google:
     enabled: ${GOOGLE_AUTH_ENABLED:false}
     client-id: ${GOOGLE_CLIENT_ID:}
+
+logging:
+  level:
+    com.aiphotoeditor.project: DEBUG
+    com.aiphotoeditor.asset: DEBUG
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: ERROR
