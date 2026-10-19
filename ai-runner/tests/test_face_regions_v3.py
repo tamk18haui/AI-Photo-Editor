@@ -89,9 +89,10 @@ def test_unsupported_region_fail_closed(fake_models):
     assert err.value.code == 'UNSUPPORTED_FACE_REGION'
     with pytest.raises(RunnerError):
         face_regions.generate(fake_models, 0, ['SKIN','SKIN'])
-    # Extras are gated pending a reviewed YAML contract change.
-    with pytest.raises(RunnerError):
-        face_regions.generate(fake_models, 0, ['IRIS'])
+    # All six makeup-specific regions are now part of the N4 public contract.
+    for region in ("CHEEKS", "LEFT_CHEEK", "RIGHT_CHEEK",
+                   "IRIS", "LEFT_IRIS", "RIGHT_IRIS"):
+        assert region in face_regions.CONTRACT_REGIONS
 
 
 def test_grayscale_label_map(fake_models):

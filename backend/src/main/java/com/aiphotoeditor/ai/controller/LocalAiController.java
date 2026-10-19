@@ -154,9 +154,31 @@ public class LocalAiController {
                         request.params()));
     }
 
+    /** LOCAL-only job routes. Keep GEMINI completely independent. */
     @GetMapping("/local/jobs/{jobId}")
     public AiJobDtos.AiJobView localJob(@PathVariable long jobId) {
-        return jobs.get(jobId);
+        return requireLocalJob(jobId);
+    }
+
+    @PostMapping("/local/jobs/{jobId}/cancel")
+    public AiJobDtos.AiJobView cancelLocalJob(@PathVariable long jobId) {
+        requireLocalJob(jobId);
+        return jobs.cancel(jobId);
+    }
+
+    @PostMapping("/local/jobs/{jobId}/retry")
+    public ResponseEntity<AiJobDtos.AiJobResponse> retryLocalJob(@PathVariable long jobId) {
+        requireLocalJob(jobId);
+        return accepted(jobs.retry(jobId));
+    }
+
+    /** AiJobService.get checks logged-in user and Project ownership first. */
+    private AiJobDtos.AiJobView requireLocalJob(long jobId) {
+        AiJobDtos.AiJobView job = jobs.get(jobId);
+        if (!"LOCAL".equals(job.provider())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "AI_JOB_NOT_FOUND", "AI job not found");
+        }
+        return job;
     }
 
     @PostMapping("/local/face-landmarks")
