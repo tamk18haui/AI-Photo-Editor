@@ -11,6 +11,7 @@ export const apiClient = axios.create({
 
 const PUBLIC_AUTH_ROUTES = new Set([
   '/auth/login', '/auth/register', '/auth/refresh', '/auth/google',
+  '/auth/otp/request', '/auth/otp/reset',
   '/auth/forgot-password', '/auth/reset-password',
 ]);
 const route = (url?: string) => (url ?? '').split('?')[0].replace(/\/+$/, '');

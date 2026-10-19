@@ -27,6 +27,12 @@ export const authApi = {
   linkGoogle: async (credential: string): Promise<void> => {
     await apiClient.post('/auth/google/link', { credential });
   },
+  requestPasswordOtp: async (email: string): Promise<void> => {
+    await apiClient.post('/auth/otp/request', { email });
+  },
+  resetPasswordOtp: async (email: string, code: string, newPassword: string): Promise<void> => {
+    await apiClient.post('/auth/otp/reset', { email, code, newPassword });
+  },
   forgotPassword: async (email: string): Promise<void> => {
     await apiClient.post('/auth/forgot-password', { email });
   },

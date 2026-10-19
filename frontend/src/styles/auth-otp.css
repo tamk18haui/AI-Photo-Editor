@@ -1,0 +1,122 @@
+/* N3 password-recovery page only. Keep auth-modern.css and other auth pages untouched. */
+.lum-otp-shell {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 80% 0%, #e6e5ff 0%, transparent 48%),
+              linear-gradient(120deg, #f9f7ff 0%, #f5f1ff 54%, #e9edff 100%);
+  position: relative;
+  overflow-x: clip;
+  overflow-y: auto;
+  color: #25203e;
+}
+.lum-otp-shell a {text-decoration:none}
+.lum-otp-shell button,.lum-otp-shell input {font:inherit}
+.lum-otp-glow {position:absolute;border-radius:50%;pointer-events:none;filter:blur(12px)}
+.lum-otp-glow-one {width:360px;height:360px;top:-190px;right:-90px;background:#cbc8ff85}
+.lum-otp-glow-two {width:380px;height:380px;bottom:-230px;left:-140px;background:#d9c9ff90}
+.lum-otp-container {position:relative;width:min(1120px,calc(100% - 48px));margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+.lum-otp-header {height:92px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+.lum-otp-header-back {color:#706684;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;transition:color .18s}
+.lum-otp-header-back:hover,.lum-otp-bottom-link a:hover {color:#6b42ef}
+.lum-otp-layout {display:grid;grid-template-columns:minmax(320px,.9fr) minmax(460px,1.1fr);width:100%;margin:auto;border-radius:28px;box-shadow:0 26px 70px #554a991c;overflow:hidden;min-height:590px;background:white;border:1px solid #ffffffd4}
+.lum-otp-story {background:linear-gradient(153deg,#875df7 0%,#6d44d9 49%,#45319a 100%);color:white;display:flex;flex-direction:column;position:relative;overflow:hidden;padding:35px 34px 29px;isolation:isolate}
+.lum-otp-story::before {content:"";position:absolute;width:330px;height:330px;border:1px solid #ffffff25;border-radius:50%;right:-155px;top:70px;box-shadow:0 0 0 65px #ffffff07,0 0 0 130px #ffffff06;z-index:-1}
+.lum-otp-story::after {content:"";position:absolute;width:240px;height:240px;border-radius:50%;background:#ffffff13;filter:blur(9px);left:-145px;bottom:-120px;z-index:-1}
+.lum-otp-story-top {display:flex;gap:13px;align-items:center;font-size:10px;letter-spacing:2px;font-weight:800;color:#ded3ff}
+.lum-otp-story-icon {width:48px;height:48px;border:1px solid #ffffff48;border-radius:15px;display:grid;place-items:center;background:#ffffff25;color:white}
+.lum-otp-story-main {margin:auto 0;position:relative;z-index:1;padding:25px 0}
+.lum-otp-story-kicker {display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:1.6px;font-weight:800;color:#e8deff}
+.lum-otp-story h1 {font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:white;font-size:clamp(27px,3vw,38px);font-weight:800;line-height:1.22;letter-spacing:-1.15px;margin:16px 0 13px}
+.lum-otp-story-main>p {color:#e6dbff;font-size:13px;line-height:1.75;max-width:320px;margin:0}
+.lum-otp-feature-list {display:flex;flex-direction:column;gap:17px;margin-top:37px}
+.lum-otp-feature-list>div {display:flex;align-items:center;gap:13px}
+.lum-otp-feature-list>div>span {height:40px;width:40px;flex:none;display:grid;place-items:center;border:1px solid #ffffff3e;background:#ffffff1c;border-radius:12px}
+.lum-otp-feature-list strong {display:block;font-size:12px;font-weight:750}
+.lum-otp-feature-list small {display:block;color:#dfd3fa;font-size:11px;margin-top:4px;line-height:1.45}
+.lum-otp-story-footer {display:flex;align-items:center;gap:9px;color:#e4d9ff;font-size:11px;font-weight:600}
+.lum-otp-panel {padding:28px clamp(22px,4vw,54px) 22px;display:flex;flex-direction:column;background:#ffffff;min-width:0}
+.lum-otp-progress {display:flex;justify-content:space-between;position:relative;gap:7px;max-width:400px;width:100%;margin:0 auto 21px;z-index:0}
+.lum-otp-progress::before {content:"";position:absolute;top:14px;left:9%;width:82%;height:1px;background:#e9e2f4;z-index:-1}
+.lum-otp-progress-step {display:flex;align-items:center;gap:7px;color:#a49bb4;background:#fff;padding:0 5px;font-size:11px;font-weight:700;white-space:nowrap}
+.lum-otp-progress-dot {width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:#f6f3fa;border:1px solid #e9e3f0;font-size:11px;color:#a299b0}
+.lum-otp-progress-step.is-current {color:#7144e4}
+.lum-otp-progress-step.is-current .lum-otp-progress-dot {background:#8251f4;border-color:#8251f4;color:#fff;box-shadow:0 4px 12px #8665e244}
+.lum-otp-progress-step.is-done {color:#34a081}
+.lum-otp-progress-step.is-done .lum-otp-progress-dot {background:#e4f9f1;color:#1a9c75;border-color:#c7eee2}
+.lum-otp-content {max-width:420px;width:100%;margin:auto;min-width:0;animation:lum-otp-appear .3s ease-out}
+@keyframes lum-otp-appear {from {opacity:.5;transform:translateY(8px)}to {opacity:1;transform:translateY(0)}}
+.lum-otp-heading-icon {height:56px;width:56px;border-radius:17px;display:grid;place-items:center;color:#8151ee;background:#f1eaff;margin-bottom:16px}
+.lum-otp-eyebrow {font-size:10px;letter-spacing:2px;color:#8a5ce9;font-weight:850;margin-bottom:9px}
+.lum-otp-content h2 {font-size:clamp(25px,2.5vw,31px);line-height:1.22;letter-spacing:-.9px;margin:0 0 10px;color:#231b39;font-weight:800}
+.lum-otp-subtitle {color:#867c9a;font-size:13px;line-height:1.65;margin:0 0 22px}
+.lum-otp-form {display:flex;flex-direction:column}
+.lum-otp-label {font-size:12px;color:#312844;font-weight:750;margin:0 0 8px}
+.lum-otp-field {display:flex;align-items:center;gap:10px;padding:0 13px;height:49px;border:1px solid #e4deec;border-radius:12px;background:#fcfbff;color:#a192b5;margin-bottom:16px;transition:border-color .18s,box-shadow .18s}
+.lum-otp-field:focus-within {border-color:#9673eb;box-shadow:0 0 0 3px #eee8ff}
+.lum-otp-field input {background:transparent;outline:0;border:0;flex:1;min-width:0;height:100%;color:#2b2346;font-size:13px}
+.lum-otp-field input::placeholder {color:#b0a6bc}
+.lum-otp-visibility {border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:#9c8faa;padding:6px;border-radius:6px}
+.lum-otp-visibility:hover {color:#7450e5;background:#f5f0ff}
+.lum-otp-main-button {display:flex;justify-content:center;align-items:center;gap:10px;width:100%;min-height:49px;border:0;border-radius:12px;color:#fff!important;background:linear-gradient(110deg,#9762fd,#7046ed);font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 10px 22px #7e52e53a;transition:transform .16s,box-shadow .16s;margin-top:8px}
+.lum-otp-main-button:hover:not(:disabled) {transform:translateY(-2px);box-shadow:0 14px 25px #7e52e554}
+.lum-otp-main-button:disabled {opacity:.63;cursor:wait;transform:none}
+.lum-otp-recipient {display:flex;align-items:center;gap:9px;background:#f6f3ff;color:#6c4ab6;border:1px solid #eee7ff;border-radius:11px;padding:10px 12px;margin:-8px 0 17px;font-size:12px;font-weight:650;min-width:0}
+.lum-otp-recipient span {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.lum-otp-recipient button {color:#7547e7;background:#fff;border:1px solid #e1d6fc;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px;font-weight:750;white-space:nowrap}
+.lum-otp-recipient button:hover {background:#eae2ff}
+.lum-otp-code-control {position:relative;margin-bottom:8px;cursor:text}
+.lum-otp-code-control input {position:absolute;inset:0;width:100%;height:100%;opacity:.01;z-index:2;cursor:text;letter-spacing:1px}
+.lum-otp-code-digits {display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;pointer-events:none}
+.lum-otp-code-digits span {height:51px;min-width:0;display:flex;align-items:center;justify-content:center;border:1px solid #e4deec;border-radius:11px;background:#fcfbff;color:#5f39c7;font-size:20px;font-weight:850;transition:border-color .15s,box-shadow .15s}
+.lum-otp-code-control:focus-within .lum-otp-code-digits span.is-active {border-color:#9066ed;box-shadow:0 0 0 3px #efe9ff}
+.lum-otp-code-control input:disabled+.lum-otp-code-digits {opacity:.65}
+.lum-otp-expiry {color:#9b8ca9;font-size:11px;display:flex;align-items:center;gap:6px;margin:2px 0 19px}
+.lum-otp-verify-form .lum-otp-field {margin-bottom:14px}
+.lum-otp-verify-form .lum-otp-main-button {margin-top:4px}
+.lum-otp-resend {display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:#9589a7}
+.lum-otp-resend button {display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;padding:5px;color:#7850e7;font-size:11px;font-weight:750;cursor:pointer}
+.lum-otp-resend button:disabled {color:#ada3bc;cursor:not-allowed}
+.lum-otp-notice {display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;border:1px solid #dfd3ff;border-radius:11px;padding:12px 13px;background:#f7f2ff;color:#6952a7;font-size:12px;line-height:1.6}
+.lum-otp-notice svg {flex:none;margin-top:1px}
+.lum-otp-notice.is-error {border-color:#fbd0d0;background:#fff4f4;color:#b03845}
+.lum-otp-notice.is-success {border-color:#c6ebdc;background:#f0fbf7;color:#16835c}
+.lum-otp-bottom-link {display:flex;justify-content:center;margin:22px 0 0}
+.lum-otp-bottom-link a {display:inline-flex;align-items:center;gap:7px;color:#8a7e9f;font-size:12px;font-weight:700}
+.lum-otp-panel-footer {display:flex;align-items:center;justify-content:center;gap:7px;border-top:1px solid #f0ecf6;margin-top:18px;padding-top:17px;font-size:10px;color:#a097af;text-align:center}
+.lum-otp-success-icon {display:grid;place-items:center;width:74px;height:74px;border-radius:24px;background:#e9f9ef;color:#20ad78;margin-bottom:19px;box-shadow:0 0 0 7px #f4fcf6}
+.lum-otp-copyright {text-align:center;color:#a197b0;font-size:11px;padding:20px 0 12px;margin:0}
+.lum-otp-spin {animation:lum-otp-rotate .85s linear infinite}
+@keyframes lum-otp-rotate {to {transform:rotate(360deg)}}
+.lum-otp-shell :where(button,a,input):focus-visible {outline:3px solid #b49bf5;outline-offset:3px}
+@media(max-width:960px) {
+  .lum-otp-layout {grid-template-columns:minmax(270px,.83fr) minmax(400px,1.17fr)}
+  .lum-otp-story {padding:29px 25px}
+  .lum-otp-story h1 {font-size:30px}
+  .lum-otp-panel {padding:25px 28px 21px}
+}
+@media(max-width:760px) {
+  .lum-otp-container {width:min(560px,calc(100% - 28px))}
+  .lum-otp-header {height:72px}
+  .lum-otp-layout {grid-template-columns:minmax(0,1fr);min-height:0}
+  .lum-otp-story {display:none}
+  .lum-otp-panel {padding:26px clamp(20px,5vw,36px) 24px;min-height:520px}
+  .lum-otp-content {margin:25px auto}
+  .lum-otp-panel-footer {margin-top:auto}
+}
+@media(max-width:420px) {
+  .lum-otp-header-back {font-size:0;gap:0}
+  .lum-otp-header-back svg {width:20px;height:20px}
+  .lum-otp-container {width:calc(100% - 20px)}
+  .lum-otp-layout {border-radius:20px}
+  .lum-otp-panel {padding:22px 17px}
+  .lum-otp-code-digits {gap:6px}
+  .lum-otp-code-digits span {height:45px;font-size:18px;border-radius:9px}
+  .lum-otp-progress-step {font-size:10px;gap:4px}
+  .lum-otp-progress-dot {width:25px;height:25px}
+  .lum-otp-progress::before {top:12px}
+  .lum-otp-copyright {font-size:10px}
+}
+@media(prefers-reduced-motion:reduce) {
+  .lum-otp-content {animation:none}
+  .lum-otp-main-button,.lum-otp-field,.lum-otp-code-digits span {transition:none}
+  .lum-otp-spin {animation:none}
+}
