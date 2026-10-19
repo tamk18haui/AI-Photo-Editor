@@ -180,3 +180,9 @@
   .lum-collage-slide {transition:none;transform:none}
   .lum-collage-slide.active {transform:none}
 }
+.lum-google-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

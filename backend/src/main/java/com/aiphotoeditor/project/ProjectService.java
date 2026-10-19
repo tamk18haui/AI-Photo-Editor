@@ -73,16 +73,39 @@ public class ProjectService {
  @Transactional(readOnly=true)
  public ProjectResponse get(long id){return response(access.requireMine(id));}
  @Transactional
- public ProjectResponse update(long id,UpdateProjectRequest r){
-  Project p=access.requireMine(id);
-  if(r.name()!=null){if(r.name().isBlank())throw new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Name cannot be blank");p.name=r.name().trim();}
-  if(r.thumbnailAssetId()!=null){
-    if(r.thumbnailAssetId()<1)throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_REQUEST","Invalid thumbnail id");
-    assets.ownedAssetUrl(r.thumbnailAssetId(),access.currentUserId(),p.id);
-    p.thumbnailAssetId=r.thumbnailAssetId();
-  }
-  p.updatedAt=Instant.now();return response(projects.saveAndFlush(p));
- }
+public ProjectResponse update(long id, UpdateProjectRequest r) {
+    Project p = access.requireMine(id);
+
+    if (r.name() != null) {
+        if (r.name().isBlank())
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Name cannot be blank"
+            );
+        p.name = r.name().trim();
+    }
+
+    if (r.thumbnailAssetId() != null) {
+        if (r.thumbnailAssetId() < 1)
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_REQUEST",
+                "Invalid thumbnail id"
+            );
+
+        assets.ownedAssetUrl(
+            r.thumbnailAssetId(),
+            access.currentUserId(),
+            p.id
+        );
+
+        p.thumbnailAssetId = r.thumbnailAssetId();
+    }
+
+    p.updatedAt = Instant.now();
+    return response(projects.saveAndFlush(p));
+}
  /** Lifecycle API is managed by ProjectLifecycleService. Kept for source compatibility. */
  @Deprecated
  @Transactional
@@ -162,8 +185,30 @@ public class ProjectService {
    }
   }else if(node.isArray())for(JsonNode child:node)checkNode(child,projectId,checked);
  }
- private ProjectResponse response(Project p){
-  String thumb=p.thumbnailAssetId==null?null:assets.ownedAssetUrl(p.thumbnailAssetId,p.owner.id,p.id);
-  return new ProjectResponse(p.id,p.name,p.owner.id,p.canvasWidth,p.canvasHeight,thumb,p.createdAt,p.updatedAt);
- }
+ 
+
+private ProjectResponse response(Project p) {
+    Long ownerId = access.currentUserId();
+
+    String thumb = p.thumbnailAssetId == null
+        ? null
+        : assets.ownedAssetUrl(
+            p.thumbnailAssetId,
+            ownerId,
+            p.id
+        );
+
+    return new ProjectResponse(
+        p.id,
+        p.name,
+        ownerId,
+        p.canvasWidth,
+        p.canvasHeight,
+        thumb,
+        p.createdAt,
+        p.updatedAt
+    );
+}
+
+
 }

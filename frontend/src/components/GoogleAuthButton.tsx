@@ -4,77 +4,101 @@ import { authApi } from '../services/authApi';
 import { authSession } from '../services/authSession';
 
 type CredentialResponse = { credential?: string };
-type Gis = { accounts: { id: {
-  initialize(config: { client_id: string; callback: (result: CredentialResponse) => void }): void;
-  renderButton(target: HTMLElement, options: Record<string, unknown>): void;
-} } };
-declare global { interface Window { google?: Gis } }
+type GoogleAccounts = {
+  id: {
+    initialize(config: {
+      client_id: string;
+      callback: (result: CredentialResponse) => void;
+    }): void;
+    renderButton(target: HTMLElement, options: Record<string, unknown>): void;
+  };
+};
+declare global {
+  interface Window { google?: { accounts: GoogleAccounts } }
+}
 
-// Google GIS requires a WEB OAuth Client ID (public), not a client secret or Gmail App Password.
-export default function GoogleAuthButton({ onDone, onError, mode = 'login' }: {
+type Props = {
   onDone: () => void;
   onError: (message: string) => void;
   mode?: 'login' | 'link';
-}) {
-  const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
+};
+
+const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
+
+export default function GoogleAuthButton({ onDone, onError, mode = 'login' }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const callbackRef = useRef({ onDone, onError, mode });
-  callbackRef.current = { onDone, onError, mode };
+  const callbacks = useRef({ onDone, onError, mode });
+  callbacks.current = { onDone, onError, mode };
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!CLIENT_ID) return;
     let active = true;
     let script: HTMLScriptElement | null = null;
+    let initialized = false;
+
     const initialize = () => {
-      if (!active || !window.google?.accounts.id || !mountRef.current) return;
+      if (!active || initialized || !mountRef.current || !window.google?.accounts.id) return;
+      initialized = true;
       window.google.accounts.id.initialize({
-        client_id: clientId,
+        client_id: CLIENT_ID,
         callback: async ({ credential }) => {
+          if (!active) return;
           if (!credential) {
-            callbackRef.current.onError('Google không trả về mã đăng nhập. Vui lòng thử lại.');
+            callbacks.current.onError('Google không trả về thông tin đăng nhập. Vui lòng thử lại.');
             return;
           }
           try {
-            if (callbackRef.current.mode === 'link') {
+            if (callbacks.current.mode === 'link') {
               await authApi.linkGoogle(credential);
             } else {
               const response = await authApi.google(credential);
-              if (!response.accessToken) throw new Error('No access token from backend');
+              if (!response.accessToken) throw new Error('Backend did not return an access token');
               authSession.save(response);
             }
-            callbackRef.current.onDone();
+            if (active) callbacks.current.onDone();
           } catch (error: unknown) {
-            const code = axios.isAxiosError(error) ? (error.response?.data as { code?: string } | undefined)?.code : undefined;
+            if (!active) return;
+            const code = axios.isAxiosError(error)
+              ? (error.response?.data as { code?: string } | undefined)?.code
+              : undefined;
             const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-            const message = code === 'GOOGLE_ACCOUNT_LINK_REQUIRED'
-              ? 'Email này đã đăng ký bằng mật khẩu. Hãy đăng nhập bằng mật khẩu, mở avatar và chọn "Liên kết Google".'
-              : code === 'GOOGLE_EMAIL_MISMATCH'
-              ? 'Email Google khác email tài khoản Lumina đang đăng nhập.'
-              : code === 'GOOGLE_ALREADY_LINKED'
-              ? 'Tài khoản Google đã được liên kết trước đó.'
-              : code === 'GOOGLE_UNVERIFIED_EMAIL'
-              ? 'Email Google chưa được xác minh.'
-              : code === 'GOOGLE_INVALID_CREDENTIAL' || status === 401
-              ? 'Mã đăng nhập Google không hợp lệ hoặc đã hết hạn. Hãy thử lại.'
-              : status === 404 || status === 503
-              ? 'Backend chưa bật Google Login. Kiểm tra GOOGLE_AUTH_ENABLED và GOOGLE_CLIENT_ID.'
-              : status === 409
-              ? 'Không thể liên kết tài khoản này. Kiểm tra email đã sử dụng.'
-              : !status
-              ? 'Không kết nối được Backend. Kiểm tra cổng 8080.'
-              : 'Google Login thất bại. Mã HTTP: ' + status;
-            callbackRef.current.onError(message);
+            const message =
+              code === 'GOOGLE_ACCOUNT_LINK_REQUIRED'
+                ? 'Email đã đăng ký bằng mật khẩu. Hãy đăng nhập bằng email rồi vào Tài khoản → Liên kết Google.'
+                : code === 'GOOGLE_EMAIL_MISMATCH'
+                ? 'Email Google không trùng email tài khoản Lumina.'
+                : code === 'GOOGLE_ALREADY_LINKED'
+                ? 'Tài khoản Google này đã được liên kết.'
+                : code === 'GOOGLE_UNVERIFIED_EMAIL'
+                ? 'Email Google chưa được xác minh.'
+                : code === 'GOOGLE_INVALID_CREDENTIAL' || status === 401
+                ? 'Google ID Token không hợp lệ hoặc hết hạn. Hãy thử lại.'
+                : status === 404 || status === 503
+                ? 'Backend chưa bật Google Login hoặc chưa cấu hình Client ID.'
+                : status === 409
+                ? 'Không thể liên kết tài khoản Google.'
+                : !status && axios.isAxiosError(error)
+                ? 'Không kết nối được Backend. Kiểm tra Spring Boot và Vite proxy.'
+                : 'Đăng nhập Google thất bại. Kiểm tra tab Network của trình duyệt.';
+            callbacks.current.onError(message);
           }
         },
       });
       mountRef.current.replaceChildren();
       window.google.accounts.id.renderButton(mountRef.current, {
-        type: 'standard', theme: 'outline', size: 'large',
-        text: mode === 'link' ? 'continue_with' : 'signin_with', width: 300,
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        locale: 'vi',
+        width: 300,
       });
       setState('ready');
     };
+
     if (window.google?.accounts.id) {
       initialize();
     } else {
@@ -83,24 +107,44 @@ export default function GoogleAuthButton({ onDone, onError, mode = 'login' }: {
         script = document.createElement('script');
         script.src = 'https://accounts.google.com/gsi/client';
         script.async = true;
+        script.defer = true;
         script.dataset.luminaGis = '1';
         document.head.appendChild(script);
       }
       script.addEventListener('load', initialize);
-      script.addEventListener('error', () => { if (active) setState('error'); }, { once: true });
-      // If another component loaded it while this one mounted.
+      script.addEventListener('error', handleScriptError);
+      // Handle a script that completed before we attached listeners.
       if (window.google?.accounts.id) initialize();
     }
+
+    function handleScriptError() {
+      if (active) setState('error');
+    }
+
     return () => {
       active = false;
       script?.removeEventListener('load', initialize);
+      script?.removeEventListener('error', handleScriptError);
     };
-  }, [clientId, mode]);
+  }, [mode]);
 
-  if (!clientId) return <p role="status" className="lum-auth-hint">Đăng nhập Google chưa cấu hình OAuth Client ID.</p>;
-  return <div aria-label={mode === 'link' ? 'Liên kết tài khoản Google' : 'Đăng nhập Google'}>
-    <div ref={mountRef} />
-    {state === 'loading' && <small>Đang tải Google Login...</small>}
-    {state === 'error' && <p role="alert">Không tải được Google. Kiểm tra mạng hoặc tiện ích chặn script.</p>}
-  </div>;
+  if (!CLIENT_ID) {
+    return (
+      <p role="status" className="lum-auth-hint" style={{ justifyContent: 'center' }}>
+        Đăng nhập Google đang được thiết lập.
+      </p>
+    );
+  }
+  return (
+    <div
+      aria-label={mode === 'link' ? 'Liên kết tài khoản Google' : 'Đăng nhập bằng Google'}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 44 }}
+    >
+      <div ref={mountRef} />
+      {state === 'loading' && <small>Đang tải Google Login...</small>}
+      {state === 'error' && (
+        <p role="alert">Không tải được Google Identity Services. Kiểm tra kết nối hoặc tiện ích chặn quảng cáo.</p>
+      )}
+    </div>
+  );
 }

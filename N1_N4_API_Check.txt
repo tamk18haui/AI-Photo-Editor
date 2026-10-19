@@ -1,0 +1,298 @@
+﻿
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:19:@RestController
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:20:@RequestMapping("/api/
+ai")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:21:public class 
+LocalAiController {
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:67:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:68:    
+@PostMapping("/upscale")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:69:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> upscale(
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:78:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:79:    
+@PostMapping("/remove-background")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:80:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> removeBackground(
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:89:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:90:    
+@PostMapping("/denoise")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:91:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> denoise(
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:99:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:100:    
+@PostMapping("/auto-enhance")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:101:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> autoEnhance(
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:110:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:111:    
+@PostMapping("/face-restore")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:112:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> faceRestore(
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:120:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:121:    
+@PostMapping("/analyze-quality")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:122:    public JsonNode 
+analyze(@Valid @RequestBody ImageRequest request) {
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:128:    /** Return 
+normalized face rectangles from an owned project asset. */
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:129:    
+@PostMapping("/local/analyze-faces")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:130:    public JsonNode 
+analyzeFaces(@Valid @RequestBody ImageRequest request) {
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:136:    /** Extra local 
+operations avoid overriding Gemini/Natural Edit routes. */
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:137:    
+@PostMapping("/local/operations/{operation}")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:138:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> operation(
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:156:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:157:    
+@GetMapping("/local/jobs/{jobId}")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:158:    public 
+AiJobDtos.AiJobView localJob(@PathVariable long jobId) {
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:161:
+> backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:162:    
+@PostMapping("/local/face-landmarks")
+  backend\src\main\java\com\aiphotoeditor\ai\controller\LocalAiController.java:163:    public JsonNode 
+faceLandmarks(@Valid @RequestBody ImageRequest request) {
+  backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:15:@RestController
+> backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:16:@RequestMapping("/api/ai/
+local")
+  backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:17:public class 
+FaceStudioController {
+  backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:34:
+> backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:35:    
+@PostMapping("/face-detect")
+  backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:36:    public 
+FaceStudioService.FaceAnalysisResponse detect(@Valid @RequestBody DetectRequest request) {
+  backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:39:
+> backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:40:    
+@PostMapping("/face-regions")
+  backend\src\main\java\com\aiphotoeditor\ai\face\FaceStudioController.java:41:    public 
+FaceStudioService.FaceRegionMaskResponse regions(@Valid @RequestBody RegionRequest request) {
+  backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:23:@RestController
+> backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:24:@RequestMapping("/api/ai/loca
+l")
+  backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:25:public class 
+MakeupController {
+  backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:38:
+> backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:39:    @PostMapping("/makeup")
+  backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:40:    public 
+ResponseEntity<AiJobDtos.AiJobResponse> makeup(@Valid @RequestBody MakeupRequest request) {
+  backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:73:
+> backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:74:    
+@GetMapping("/capabilities")
+  backend\src\main\java\com\aiphotoeditor\ai\face\MakeupController.java:75:    public JsonNode 
+capabilities(){return runner.capabilitiesV3();}
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:13:@RestController
+> backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:14:@RequestMapping("/api/projects/{
+projectId}/assets")
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:15:public class AssetController {
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:22:    /** Function: Return only 
+assets belonging to the authenticated user's project. */
+> backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:23:    @GetMapping
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:24:    public List<AssetResponse> 
+list(@PathVariable long projectId,
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:29:    /** Function: Validate and 
+upload a project image to Cloudinary through Spring Boot. */
+> backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:30:    @PostMapping(consumes = 
+MediaType.MULTIPART_FORM_DATA_VALUE)
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:31:    public 
+ResponseEntity<AssetResponse> upload(
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:38:    /** Function: Return one 
+asset if it belongs to the caller's project. */
+> backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:39:    @GetMapping("/{assetId}")
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:40:    public AssetResponse 
+get(@PathVariable long projectId, @PathVariable long assetId) {
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:44:    /** Function: Remove a 
+project-owned asset from Cloudinary and metadata storage. */
+> backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:45:    @DeleteMapping("/{assetId}")
+  backend\src\main\java\com\aiphotoeditor\asset\AssetController.java:46:    
+@ResponseStatus(HttpStatus.NO_CONTENT)
+  backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:5:import 
+org.springframework.web.bind.annotation.*;
+> backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:6:@RestController 
+@RequestMapping("/api/auth")
+  backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:7:public class AuthController {
+  backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:9: public AuthController(AuthService 
+auth,CurrentUser current){this.auth=auth;this.current=current;}
+> backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:10: @PostMapping("/register") public 
+ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest r){return 
+ResponseEntity.status(201).body(auth.register(r));}
+> backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:11: @PostMapping("/login") public 
+AuthResponse login(@Valid @RequestBody LoginRequest r){return auth.login(r);}
+> backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:12: @PostMapping("/refresh") public 
+AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest r){return auth.refresh(r);}
+> backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:13: @PostMapping("/logout") 
+@ResponseStatus(HttpStatus.NO_CONTENT)
+  backend\src\main\java\com\aiphotoeditor\auth\AuthController.java:14: public void 
+logout(@RequestBody(required=false) LogoutRequest r){auth.logout(current.id(),r);}
+  backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:32:@RestController
+> backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:33:@RequestMapping("/api/auth")
+  
+backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:34:@ConditionalOnProperty(prefix 
+= "app.google", name = "enabled", havingValue = "true")
+  backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:43:
+> backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:44:    @PostMapping("/google")
+  backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:45:    public AuthResponse 
+login(@Valid @RequestBody GoogleCredentialRequest request) {
+  backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:49:    /** Requires a 
+signed-in Lumina account; prevents email-based account takeover. */
+> backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:50:    
+@PostMapping("/google/link")
+  backend\src\main\java\com\aiphotoeditor\auth\GoogleAuthController.java:51:    public 
+ResponseEntity<Void> link(@Valid @RequestBody GoogleCredentialRequest request) {
+  backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:11:@RestController
+> backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:12:@RequestMapping("/api/aut
+h")
+  backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:13:public class 
+PasswordResetController {
+  backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:24:
+> backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:25:    
+@PostMapping("/forgot-password")
+  backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:26:    public 
+ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+  backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:31:
+> backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:32:    
+@PostMapping("/reset-password")
+  backend\src\main\java\com\aiphotoeditor\auth\PasswordResetController.java:33:    public 
+MessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+  backend\src\main\java\com\aiphotoeditor\gemini\GeminiEditController.java:11:@RestController
+> backend\src\main\java\com\aiphotoeditor\gemini\GeminiEditController.java:12:@RequestMapping("/api/gemi
+ni")
+  backend\src\main\java\com\aiphotoeditor\gemini\GeminiEditController.java:13:public class 
+GeminiEditController {
+  backend\src\main\java\com\aiphotoeditor\gemini\GeminiEditController.java:19:
+> backend\src\main\java\com\aiphotoeditor\gemini\GeminiEditController.java:20:    @PostMapping(value = 
+"/edit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  backend\src\main\java\com\aiphotoeditor\gemini\GeminiEditController.java:21:    public 
+GeminiImageService.GeminiEditResponse edit(
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:12:@RestController
+> backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:13:@RequestMapping("/api/projec
+ts/{projectId}")
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:14:public class 
+HistoryController {
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:20:
+> backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:21:    @GetMapping("/history")
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:22:    public 
+List<EditHistoryItem> history(@PathVariable long projectId) {
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:25:
+> backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:26:    @PostMapping("/history")
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:27:    public 
+ResponseEntity<EditHistoryItem> append(@PathVariable long projectId,
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:31:
+> backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:32:    @GetMapping("/versions")
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:33:    public 
+List<ProjectVersion> versions(@PathVariable long projectId) {
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:36:
+> backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:37:    
+@PostMapping("/versions")
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:38:    public 
+ResponseEntity<ProjectVersion> snapshot(@PathVariable long projectId,
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:42:
+> backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:43:    
+@PostMapping("/versions/{versionId}/restore")
+  backend\src\main\java\com\aiphotoeditor\history\HistoryController.java:44:    public JsonNode 
+restore(@PathVariable long projectId, @PathVariable long versionId) {
+  backend\src\main\java\com\aiphotoeditor\layer\AiResultLayerController.java:10:@RestController
+> backend\src\main\java\com\aiphotoeditor\layer\AiResultLayerController.java:11:@RequestMapping("/api/pr
+ojects/{projectId}/layers")
+  backend\src\main\java\com\aiphotoeditor\layer\AiResultLayerController.java:12:public class 
+AiResultLayerController {
+  backend\src\main\java\com\aiphotoeditor\layer\AiResultLayerController.java:18:
+> backend\src\main\java\com\aiphotoeditor\layer\AiResultLayerController.java:19:    
+@PostMapping("/from-ai-job")
+  backend\src\main\java\com\aiphotoeditor\layer\AiResultLayerController.java:20:    public 
+ResponseEntity<AttachAiJobResultResponse> attach(
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:8:@RestController
+> backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:9:@RequestMapping("/api/projects
+/{projectId}/layers")
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:10:public class LayerController 
+{
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:12: public 
+LayerController(LayerService service){this.service=service;}
+> backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:13: @PatchMapping("/{layerId}")
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:14: public LayerResult 
+patch(@PathVariable long projectId,@PathVariable String layerId,@Valid @RequestBody LayerPatch request){
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:16: }
+> backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:17: @DeleteMapping("/{layerId}")
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:18: public LayerResult 
+delete(@PathVariable long projectId,@PathVariable String layerId,
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:21: }
+> backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:22: @PutMapping("/order")
+  backend\src\main\java\com\aiphotoeditor\layerops\LayerController.java:23: public LayerResult 
+reorder(@PathVariable long projectId,@Valid @RequestBody LayerOrder request){
+  backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:9:
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:10:@RestController 
+@RequestMapping("/api/projects")
+  backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:11:public class 
+ProjectController {
+  backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:14: public 
+ProjectController(ProjectService service,ProjectLifecycleService 
+lifecycle){this.service=service;this.lifecycle=lifecycle;}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:15: @GetMapping public 
+ProjectPageResponse list(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int 
+size,
+  backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:16:  
+@RequestParam(required=false) String search,@RequestParam(defaultValue="UPDATED_DESC") String 
+sort){return service.list(page,size,search,sort);}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:17: @PostMapping public 
+ResponseEntity<ProjectResponse> create(@Valid @RequestBody CreateProjectRequest r){return 
+ResponseEntity.status(201).body(service.create(r));}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:18: 
+@GetMapping("/{projectId}") public ProjectResponse get(@PathVariable long projectId){return 
+service.get(projectId);}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:19: 
+@PatchMapping("/{projectId}") public ProjectResponse update(@PathVariable long projectId,@Valid 
+@RequestBody UpdateProjectRequest r){return service.update(projectId,r);}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:20: 
+@DeleteMapping("/{projectId}") @ResponseStatus(HttpStatus.NO_CONTENT) public void delete(@PathVariable 
+long projectId){lifecycle.delete(projectId);}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:21: 
+@PostMapping("/{projectId}/duplicate") public ResponseEntity<ProjectResponse> duplicate(@PathVariable 
+long projectId,
+  backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:22:  @Valid 
+@RequestBody(required=false) DuplicateProjectRequest r){return 
+ResponseEntity.status(201).body(lifecycle.duplicate(projectId,r));}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:23: 
+@GetMapping("/{projectId}/state") public JsonNode loadState(@PathVariable long projectId){return 
+service.getState(projectId);}
+> backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:24: 
+@PutMapping("/{projectId}/state") public SaveStateResponse saveState(@PathVariable long projectId,
+  backend\src\main\java\com\aiphotoeditor\project\ProjectController.java:25:  @RequestBody JsonNode 
+state,@RequestParam(required=false) Long expectedStateVersion){
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:6:@RestController
+> backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:7:@RequestMapping("/api/projects/
+{projectId}")
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:8:public class 
+UndoRedoController {
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:12:
+> backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:13:    @GetMapping("/undo-redo")
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:14:    public UndoRedoStatus 
+status(@PathVariable long projectId) { return service.status(projectId); }
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:15:
+> backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:16:    @PostMapping("/undo")
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:17:    public UndoRedoResult 
+undo(@PathVariable long projectId) { return service.undo(projectId); }
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:18:
+> backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:19:    @PostMapping("/redo")
+  backend\src\main\java\com\aiphotoeditor\undo\UndoRedoController.java:20:    public UndoRedoResult 
+redo(@PathVariable long projectId) { return service.redo(projectId); }
+  backend\src\main\java\com\aiphotoeditor\user\UserController.java:5:import 
+org.springframework.web.bind.annotation.*;
+> backend\src\main\java\com\aiphotoeditor\user\UserController.java:6:@RestController 
+@RequestMapping("/api/users/me")
+  backend\src\main\java\com\aiphotoeditor\user\UserController.java:7:public class UserController {
+  backend\src\main\java\com\aiphotoeditor\user\UserController.java:9: public UserController(UserService 
+service){this.service=service;}
+> backend\src\main\java\com\aiphotoeditor\user\UserController.java:10: @GetMapping public UserResponse 
+me(){return service.me();}
+> backend\src\main\java\com\aiphotoeditor\user\UserController.java:11: @PatchMapping public 
+UserResponse update(@Valid @RequestBody UpdateProfileRequest r){return service.update(r);}
+> backend\src\main\java\com\aiphotoeditor\user\UserController.java:12: @PutMapping("/password") 
+@ResponseStatus(HttpStatus.NO_CONTENT)
+  backend\src\main\java\com\aiphotoeditor\user\UserController.java:13: public void 
+changePassword(@Valid @RequestBody ChangePasswordRequest r){service.changePassword(r);}
+
+
