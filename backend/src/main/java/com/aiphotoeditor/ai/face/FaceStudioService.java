@@ -31,7 +31,9 @@ public class FaceStudioService {
     private static final Set<String> CONTRACT_REGIONS = Set.of(
         "LIPS", "UPPER_LIP", "LOWER_LIP", "HAIR", "LEFT_EYE", "RIGHT_EYE",
         "EYELIDS", "EYEBROWS", "LEFT_EYEBROW", "RIGHT_EYEBROW", "SKIN",
-        "FACE", "NOSE", "TEETH", "EARS", "NECK"
+        "FACE", "NOSE", "TEETH", "EARS", "NECK",
+        "CHEEKS", "LEFT_CHEEK", "RIGHT_CHEEK",
+        "IRIS", "LEFT_IRIS", "RIGHT_IRIS"
     );
     private static final int MAX_ARCHIVE_BYTES = 80 * 1024 * 1024;
     private static final int MAX_UNCOMPRESSED_BYTES = 110 * 1024 * 1024;
