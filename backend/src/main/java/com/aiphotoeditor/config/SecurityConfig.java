@@ -49,6 +49,7 @@ public class SecurityConfig {
      .authorizeHttpRequests(a->a
        .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll()
        .requestMatchers("/api/auth/register","/api/auth/login","/api/auth/refresh","/api/auth/google",
+                        "/api/auth/otp/request","/api/auth/otp/reset",
                         "/api/auth/forgot-password","/api/auth/reset-password").permitAll()
        .requestMatchers("/actuator/health","/actuator/info").permitAll()
        .anyRequest().authenticated())

@@ -1,5 +1,6 @@
 package com.aiphotoeditor.user;
 import com.aiphotoeditor.auth.CurrentUser;
+import com.aiphotoeditor.auth.PasswordPolicy;
 import com.aiphotoeditor.assetbridge.AssetReferenceResolver;
 import com.aiphotoeditor.common.ApiException;
 import com.aiphotoeditor.user.UserDtos.*;
@@ -43,6 +44,7 @@ public class UserService {
   User u=require(current.id());
   if(u.passwordHash==null)throw new ApiException(HttpStatus.BAD_REQUEST,"GOOGLE_PASSWORD_NOT_SET","Password login not configured for this account");
   if(!encoder.matches(req.currentPassword(),u.passwordHash)) throw new ApiException(HttpStatus.BAD_REQUEST,"AUTH_INVALID_CREDENTIALS","Current password incorrect");
+  PasswordPolicy.requireValid(req.newPassword());
   if(encoder.matches(req.newPassword(),u.passwordHash))throw new ApiException(HttpStatus.BAD_REQUEST,"PASSWORD_SAME_AS_CURRENT","New password must differ");
   u.passwordHash=encoder.encode(req.newPassword());
   tokens.revokeAll(u.id,Instant.now());

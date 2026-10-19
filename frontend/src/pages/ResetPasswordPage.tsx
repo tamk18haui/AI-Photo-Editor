@@ -17,6 +17,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { authApi } from '../services/authApi';
+import PasswordStrengthHint from '../components/PasswordStrengthHint';
+import { isStrongPassword } from '../utils/passwordPolicy';
 import '../styles/reset-password-modern.css';
 
 export default function ResetPasswordPage() {
@@ -40,17 +42,13 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setNotice('');
     setSuccess(false);
-
+    if (busy) return;
     if (!token) {
       setNotice('Không tìm thấy mã khôi phục. Hãy yêu cầu gửi lại liên kết.');
       return;
     }
-    if (password.length < 8) {
-      setNotice('Mật khẩu mới phải có ít nhất 8 ký tự.');
-      return;
-    }
-    if (password.length > 200) {
-      setNotice('Mật khẩu mới tối đa 200 ký tự.');
+    if (!isStrongPassword(password)) {
+      setNotice('Mật khẩu phải có 8–200 ký tự, chữ hoa, chữ thường, số và ký tự đặc biệt.');
       return;
     }
     if (password !== confirm) {
@@ -106,7 +104,7 @@ export default function ResetPasswordPage() {
                 <span><ShieldCheck size={22} /></span>
                 <p>
                   <strong>Bảo mật hơn</strong>
-                  <small>Dùng ít nhất 8 ký tự và nên có cả chữ, số</small>
+                  <small>Cần chữ hoa, chữ thường, số và ký tự đặc biệt</small>
                 </p>
               </div>
 
@@ -185,6 +183,8 @@ export default function ResetPasswordPage() {
                   </div>
                 </label>
 
+                <PasswordStrengthHint password={password} confirm={confirm} />
+
                 <label className="lum-rp-field">
                   <span>Xác nhận mật khẩu mới</span>
                   <div className="lum-rp-input-wrap">
@@ -209,7 +209,7 @@ export default function ResetPasswordPage() {
                   <span>{show ? <EyeOff size={16} /> : <Eye size={16} />} Hiện mật khẩu</span>
                 </label>
 
-                <button className="lum-rp-submit" disabled={busy} type="submit">
+                <button className="lum-rp-submit" disabled={busy || !isStrongPassword(password) || password !== confirm} type="submit">
                   {busy ? <LoaderCircle className="lum-rp-spin" size={20} /> : <ShieldCheck size={20} />}
                   {busy ? 'Đang lưu mật khẩu mới...' : 'Đặt lại mật khẩu'}
                 </button>

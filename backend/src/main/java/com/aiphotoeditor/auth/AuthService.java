@@ -18,6 +18,7 @@ public class AuthService {
  private String email(String raw){return raw.strip().toLowerCase(Locale.ROOT);}
  @Transactional
  public AuthResponse register(RegisterRequest r){
+  PasswordPolicy.requireValid(r.password());
   String normalized=email(r.email());
   if(users.existsByEmailIgnoreCase(normalized))throw new ApiException(HttpStatus.CONFLICT,"EMAIL_ALREADY_EXISTS","Email already in use");
   var u=new User();u.email=normalized;u.passwordHash=encoder.encode(r.password());

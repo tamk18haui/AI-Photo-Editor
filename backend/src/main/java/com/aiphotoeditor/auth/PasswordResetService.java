@@ -108,6 +108,7 @@ public class PasswordResetService {
 
     @Transactional
     public void resetPassword(String rawToken, String newPassword) {
+        PasswordPolicy.requireValid(newPassword);
         if (rawToken.length() > 512) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "PASSWORD_RESET_INVALID_TOKEN", INVALID_TOKEN);
         }

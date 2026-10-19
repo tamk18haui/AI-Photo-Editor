@@ -5,6 +5,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 import { authApi } from '../services/authApi';
+import PasswordStrengthHint from '../components/PasswordStrengthHint';
+import { isStrongPassword } from '../utils/passwordPolicy';
 import { authSession } from '../services/authSession';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
@@ -158,8 +160,8 @@ export default function LoginPage() {
         return;
       }
 
-      if (password.length < 8) {
-        showNotice('Mật khẩu phải có ít nhất 8 ký tự.');
+      if (!isStrongPassword(password)) {
+        showNotice('Mật khẩu cần 8-200 ký tự, có chữ hoa, chữ thường, chữ số và ký tự đặc biệt.');
         return;
       }
 
@@ -422,6 +424,7 @@ export default function LoginPage() {
                           : 'Nhập mật khẩu của bạn'
                       }
                       minLength={register ? 8 : undefined}
+                      maxLength={register ? 200 : undefined}
                       autoComplete={
                         register ? 'new-password' : 'current-password'
                       }
@@ -444,6 +447,8 @@ export default function LoginPage() {
                     </button>
                   </div>
                 </label>
+
+                {register && <PasswordStrengthHint password={password} confirm={confirm} />}
 
                 {register && (
                   <label className="lum-field">
