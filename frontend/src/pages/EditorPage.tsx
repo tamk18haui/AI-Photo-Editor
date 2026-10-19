@@ -11,6 +11,9 @@ import {
 } from 'lucide-react';
 import './editor-modern.css';
 
+import TextTool from '../features/editor/creative/text/TextTool';
+import ShapeTool, { type ShapeType } from '../features/editor/creative/shapes/ShapeTool';
+import StickerTool, { type StickerItem } from '../features/editor/creative/stickers/StickerTool';
 type Category = 'template' | 'edit' | 'beauty' | 'design' | 'remove' | 'filters' | 'adjust' | 'effects' | 'background' | 'ai';
 type ToolItem = { id: string; label: string; status?: 'soon'; icon?: typeof Sparkles };
 type CategoryItem = { id: Category; label: string; icon: typeof Sparkles; children: ToolItem[] };
@@ -27,9 +30,12 @@ const categories: CategoryItem[] = [
     {id:'makeup',label:'Trang điểm',status:'soon'},{id:'brush',label:'Cọ',status:'soon'},{id:'skin-tone',label:'Tông da',status:'soon'},
     {id:'hair',label:'Chỉnh tóc',status:'soon'},{id:'beauty-ai',label:'Chỉnh bằng AI',status:'soon'} ] },
   { id:'design',label:'Thiết kế',icon:Layers3,children:[
-    {id:'text',label:'Văn bản',icon:Type,status:'soon'},{id:'sticker',label:'Nhãn / Sticker',icon:Sticker,status:'soon'},
-    {id:'add-image',label:'Thêm ảnh',icon:ImagePlus,status:'soon'},{id:'photo-collage',label:'Ghép ảnh',icon:Grid2X2,status:'soon'},
-    {id:'shape',label:'Hình khối',status:'soon'},{id:'drawing',label:'Vẽ tự do',icon:Brush,status:'soon'} ] },
+    {id:'text',label:'Văn bản',icon:Type},
+    {id:'sticker',label:'Nhãn / Sticker',icon:Sticker,status:'soon'},
+    {id:'add-image',label:'Thêm ảnh',icon:ImagePlus,status:'soon'},
+    {id:'photo-collage',label:'Ghép ảnh',icon:Grid2X2,status:'soon'},
+    {id:'shape',label:'Hình khối'},
+    {id:'drawing',label:'Vẽ tự do',icon:Brush,status:'soon'} ] },
   { id:'remove',label:'Xóa',icon:Eraser,children:[
     {id:'remove-object',label:'Xóa vật thể',status:'soon'},{id:'remove-manual',label:'Xóa thủ công',icon:Paintbrush,status:'soon'},
     {id:'remove-ai',label:'Xóa bằng AI',icon:WandSparkles,status:'soon'},{id:'remove-bg',label:'Xóa nền AI',status:'soon'} ] },
@@ -74,6 +80,17 @@ export default function EditorPage(){
   const [image,setImage]=useState<string|null>(null);
   const [fileName,setFileName]=useState('Chưa có ảnh');
   const [edits,setEdits]=useState<Edits>(initial);
+  const [textItems, setTextItems] = useState<
+  { id: string; text: string }[]
+>([]);
+
+const [shapeItems, setShapeItems] = useState<
+  { id: string; shape: ShapeType }[]
+>([]);
+
+const [stickerItems, setStickerItems] = useState<
+  { id: string; sticker: StickerItem }[]
+>([]);
   const [past,setPast]=useState<Edits[]>([]);
   const [future,setFuture]=useState<Edits[]>([]);
   const [status,setStatus]=useState('Sẵn sàng chỉnh sửa ảnh');
@@ -154,14 +171,135 @@ export default function EditorPage(){
           {(active==='edit'||active==='adjust')&&<div className="lv3-settings"><div className="lv3-heading"><SlidersHorizontal size={17}/> Tinh chỉnh trực tiếp</div>{active==='edit'&&<div className="lv3-ratios">{['Tự do','1:1','4:3','9:16','16:9'].map(r=><button key={r} className={edits.ratio===r?'chosen':''} onClick={()=>mutate({ratio:r})}>{r}</button>)}</div>}{slider('Độ sáng','brightness',40,160)}{slider('Tương phản','contrast',40,160)}{slider('Bão hòa','saturation',0,200)}{active==='adjust'&&<>{slider('Lux','lux',50,150)}{slider('Làm mờ','blur',0,12,'px')}</>}</div>}
           {active==='filters'&&<div className="lv3-filters-grid">{presets.map(p=><button key={p.id} onClick={()=>handleTool(p.id)} className={edits.preset===p.id?'chosen':''}><span className="lv3-filter-thumb">{image?<img src={image} alt="" style={{filter:p.filter}}/>:<Palette size={30}/>}</span><span>{p.name}</span></button>)}</div>}
           {active==='ai'&&<div className="lv3-ai-box"><strong><Sparkles size={17}/> Nhập mô tả chỉnh sửa</strong><textarea value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={1500} rows={6} placeholder="Ví dụ: Làm sáng ảnh, xóa vật thể phía sau và đổi nền thành bãi biển..."/><button onClick={()=>setStatus('Chỉnh sửa bằng ngôn ngữ cần Natural Edit API từ Backend. Prompt chưa được gửi đi.')} disabled={!prompt.trim()}><WandSparkles size={17}/> Tạo kế hoạch AI</button><p>Hiện chưa kết nối Gemini / Natural Edit, nên không tự thực thi yêu cầu.</p></div>}
-          {active==='beauty'&&<p className="lv3-soon-note">Các công cụ làm đẹp sẽ được Thắng (N2) tích hợp tại đây, các mô hình AI xử lý qua Backend.</p>}
-          {active==='design'&&<p className="lv3-soon-note">Văn bản, sticker, layer và ghép ảnh thuộc Creative module của Thắng (N2).</p>}
+          {active === 'design' && selected === 'text' && (
+              <div className="lv3-settings">
+                <div className="lv3-heading">
+                  <Type size={17} /> Thêm văn bản
+                </div>
+                <TextTool
+                  onAddText={(text) => {
+                    setTextItems((items) => [
+                      ...items,
+                      { id: `${Date.now()}-${Math.random()}`, text },
+                    ]);
+                    setStatus('Đã thêm văn bản vào ảnh');
+                  }}
+                />
+              </div>
+            )}
+
+            {active === 'design' && selected === 'shape' && (
+              <div className="lv3-settings">
+                <div className="lv3-heading">Thêm hình khối</div>
+                <ShapeTool
+                  onAddShape={(shape) => {
+                    setShapeItems((items) => [
+                      ...items,
+                      { id: `${Date.now()}-${Math.random()}`, shape },
+                    ]);
+                    setStatus('Đã thêm hình khối vào ảnh');
+                  }}
+                />
+              </div>
+            )}
+
+            {active === 'design' && selected === 'sticker' && (
+              <div className="lv3-settings">
+                <div className="lv3-heading">
+                  <Sticker size={17} /> Thêm sticker
+                </div>
+                <StickerTool
+                  onAddSticker={(sticker) => {
+                    setStickerItems((items) => [
+                      ...items,
+                      { id: `${Date.now()}-${Math.random()}`, sticker },
+                    ]);
+                    setStatus('Đã thêm sticker vào ảnh');
+                  }}
+                />
+              </div>
+        )}
           <div className="lv3-toolbox-footer"><CircleHelp size={16}/> Công cụ có nhãn SAU chưa thực thi.</div>
         </section>
         <section className="lv3-center">
           <div className="lv3-canvas-toolbar"><div className="lv3-toolbar-label"><Move size={16}/> Không gian chỉnh sửa</div><div className="lv3-toolbar-tools"><button onClick={()=>inputRef.current?.click()}><FolderOpen size={16}/> Mở ảnh</button><span className="lv3-line"/><button onClick={()=>mutate({rotation:(edits.rotation+270)%360})} title="Xoay trái"><RotateCcw size={17}/></button><button onClick={()=>mutate({rotation:(edits.rotation+90)%360})} title="Xoay phải"><RotateCw size={17}/></button><button onClick={()=>mutate({flipped:!edits.flipped})} title="Lật ngang"><FlipHorizontal size={17}/></button></div></div>
           <div className="lv3-canvas-space">
-            {image?<div className="lv3-image-stage"><img src={image} alt="Ảnh đang chỉnh sửa" style={viewStyle}/></div>:<div className="lv3-empty"><div className="lv3-empty-orb"><ImagePlus size={40}/></div><h2>Bắt đầu với một bức ảnh</h2><p>Thêm ảnh để sử dụng công cụ chỉnh sửa, bộ lọc và xem trước.</p><button onClick={()=>inputRef.current?.click()}><ImagePlus size={18}/> Chọn ảnh từ thiết bị</button><small>JPG, PNG, WebP · Tối đa 20MB</small></div>}
+            {image ? (
+              <div className="lv3-image-stage">
+                <img
+                  src={image}
+                  alt="Ảnh đang chỉnh sửa"
+                  style={viewStyle}
+                />
+
+                {textItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: `${35 + index * 8}%`,
+                      transform: 'translate(-50%, -50%)',
+                      color: '#ffffff',
+                      fontSize: 28,
+                      fontWeight: 700,
+                      textShadow: '0 2px 5px #000000',
+                      pointerEvents: 'none',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {item.text}
+                  </div>
+                ))}
+
+                {shapeItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: 'absolute',
+                      left: `${35 + index * 8}%`,
+                      top: '50%',
+                      width: 70,
+                      height: 70,
+                      border: '3px solid #8b5cf6',
+                      borderRadius:
+                        item.shape === 'circle' ? '50%' :
+                          item.shape === 'ellipse' ? '50%' :
+                            item.shape === 'rounded-rectangle' ? '12px' : '0',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ))}
+
+                {stickerItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: 'absolute',
+                      left: `${60 + index * 8}%`,
+                      top: `${35 + index * 8}%`,
+                      transform: 'translate(-50%, -50%)',
+                      fontSize: 42,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {item.sticker.emoji}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="lv3-empty">
+                <div className="lv3-empty-orb">
+                  <ImagePlus size={40} />
+                </div>
+                <h2>Bắt đầu với một bức ảnh</h2>
+                <p>Thêm ảnh để sử dụng công cụ chỉnh sửa, bộ lọc và xem trước.</p>
+                <button onClick={() => inputRef.current?.click()}>
+                  <ImagePlus size={18} /> Chọn ảnh từ thiết bị
+                </button>
+                <small>JPG, PNG, WebP · Tối đa 20MB</small>
+              </div>
+            )}
           </div>
           <div className="lv3-bottom"><span className="lv3-message" role="status">{status}</span><div className="lv3-zoom"><button onClick={()=>mutate({zoom:Math.max(40,edits.zoom-10)})} title="Thu nhỏ"><ZoomOut size={17}/></button><b>{edits.zoom}%</b><button onClick={()=>mutate({zoom:Math.min(200,edits.zoom+10)})} title="Phóng to"><ZoomIn size={17}/></button><button onClick={()=>mutate({zoom:100})} title="Về 100%">100%</button></div></div>
         </section>
