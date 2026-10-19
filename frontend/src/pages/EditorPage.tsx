@@ -22,6 +22,9 @@ import type { LocalAiJob, LocalAiOperation } from '../services/localAiApi';
 import './editor-modern.css';
 import './editor-versions-n1.css';
 
+import TextTool from '../features/editor/creative/text/TextTool';
+import ShapeTool, { type ShapeType } from '../features/editor/creative/shapes/ShapeTool';
+import StickerTool, { type StickerItem } from '../features/editor/creative/stickers/StickerTool';
 type Category = 'template' | 'edit' | 'beauty' | 'design' | 'remove' | 'filters' | 'adjust' | 'effects' | 'background' | 'ai';
 type ToolItem = { id: string; label: string; status?: 'soon'; icon?: typeof Sparkles };
 type CategoryItem = { id: Category; label: string; icon: typeof Sparkles; children: ToolItem[] };
@@ -38,9 +41,12 @@ const categories: CategoryItem[] = [
     {id:'makeup',label:'Trang điểm',status:'soon'},{id:'brush',label:'Cọ',status:'soon'},{id:'skin-tone',label:'Tông da',status:'soon'},
     {id:'hair',label:'Chỉnh tóc',status:'soon'},{id:'beauty-ai',label:'Chỉnh bằng AI',status:'soon'} ] },
   { id:'design',label:'Thiết kế',icon:Layers3,children:[
-    {id:'text',label:'Văn bản',icon:Type,status:'soon'},{id:'sticker',label:'Nhãn / Sticker',icon:Sticker,status:'soon'},
-    {id:'add-image',label:'Thêm ảnh',icon:ImagePlus,status:'soon'},{id:'photo-collage',label:'Ghép ảnh',icon:Grid2X2,status:'soon'},
-    {id:'shape',label:'Hình khối',status:'soon'},{id:'drawing',label:'Vẽ tự do',icon:Brush,status:'soon'} ] },
+    {id:'text',label:'Văn bản',icon:Type},
+    {id:'sticker',label:'Nhãn / Sticker',icon:Sticker,status:'soon'},
+    {id:'add-image',label:'Thêm ảnh',icon:ImagePlus,status:'soon'},
+    {id:'photo-collage',label:'Ghép ảnh',icon:Grid2X2,status:'soon'},
+    {id:'shape',label:'Hình khối'},
+    {id:'drawing',label:'Vẽ tự do',icon:Brush,status:'soon'} ] },
   { id:'remove',label:'Xóa',icon:Eraser,children:[
     {id:'remove-object',label:'Xóa vật thể',status:'soon'},{id:'remove-manual',label:'Xóa thủ công',icon:Paintbrush,status:'soon'},
     {id:'remove-ai',label:'Xóa bằng AI',icon:WandSparkles,status:'soon'},{id:'n4-removeBg',label:'Xóa nền AI N4',icon:WandSparkles} ] },
@@ -83,6 +89,14 @@ type Edits = { brightness:number; contrast:number; saturation:number; lux:number
 const initial: Edits = {brightness:100,contrast:100,saturation:100,lux:100,highlights:100,temperature:0,blur:0,rotation:0,flipped:false,zoom:100,ratio:'Tự do',preset:'original'};
 const MAX_BYTES=20*1024*1024;
 
+type PositionedItem = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+};
 export default function EditorPage(){
   const navigate=useNavigate();
   const {projectId: projectIdRaw}=useParams();
@@ -100,8 +114,22 @@ export default function EditorPage(){
   const [image,setImage]=useState<string|null>(null);
   const [layersOpen,setLayersOpen]=useState(true);
   const [canvasSize,setCanvasSize]=useState({width:1024,height:1024});
+  const [geminiOpen, setGeminiOpen] = useState(false);
   const [fileName,setFileName]=useState('Chưa có ảnh');
   const [edits,setEdits]=useState<Edits>(initial);
+  const [textItems, setTextItems] = useState<
+    (PositionedItem & { text: string })[]
+  >([]);
+
+  const [shapeItems, setShapeItems] = useState<
+    (PositionedItem & { shape: ShapeType })[]
+  >([]);
+
+  const [stickerItems, setStickerItems] = useState<
+    (PositionedItem & { sticker: StickerItem })[]
+  >([]);
+
+  const [, setActiveObjectId] = useState<string | null>(null);
   const [past,setPast]=useState<Edits[]>([]);
   const [future,setFuture]=useState<Edits[]>([]);
   // N1_AUTOSAVE_V1: debounce, single-writer queue, and no blind overwrites.
@@ -115,7 +143,7 @@ export default function EditorPage(){
 
   const [status,setStatus]=useState('Sẵn sàng chỉnh sửa ảnh');
   const [isBusy,setBusy]=useState(false);
-  const [geminiOpen,setGeminiOpen]=useState(false);
+ 
   // N1_VERSIONS_V1: manual checkpoints + explicit restore; no periodic snapshots.
   const [versionsOpen,setVersionsOpen]=useState(false);
   const [versions,setVersions]=useState<ProjectVersion[]>([]);
@@ -436,7 +464,91 @@ export default function EditorPage(){
           {N4_TOOLS[selected] && <LocalAiPanel key={selected} operation={N4_TOOLS[selected]} projectId={projectId} assetId={activeAssetId} disabled={!projectReady||assetBusy||projectBusy||!autosaveReady||!!(image?.startsWith('blob:'))} onApply={applyLocalAi}/>}
           {active==='ai'&&<div className="lv3-ai-box"><strong><Sparkles size={17}/> Gemini Chat</strong><p>Chỉnh ảnh bằng câu lệnh. Có xem trước và Apply; không dùng Local AI N4.</p><button type="button" disabled={!image} onClick={()=>setGeminiOpen(true)}><WandSparkles size={17}/> Mở Gemini Chat</button></div>}
           {active==='beauty'&&<p className="lv3-soon-note">Các công cụ làm đẹp sẽ được Thắng (N2) tích hợp tại đây, các mô hình AI xử lý qua Backend.</p>}
-          {active==='design'&&<p className="lv3-soon-note">Văn bản, sticker, layer và ghép ảnh thuộc Creative module của Thắng (N2).</p>}
+          {active === 'design' && selected === 'text' && (
+            <div className="lv3-settings">
+              <div className="lv3-heading">
+                <Type size={17} /> Thêm văn bản
+              </div>
+              <TextTool
+                onAddText={(text) => {
+                  const id = `${Date.now()}-${Math.random()}`;
+
+                  setTextItems((items) => [
+                    ...items,
+                    {
+                      id,
+                      text,
+                      x: 50,
+                      y: 50,
+                      width: 200,
+                      height: 60,
+                      rotation: 0,
+                    },
+                  ]);
+
+                  setActiveObjectId(id);
+                  setStatus('Đã thêm văn bản vào ảnh');
+                }}
+              />
+            </div>
+          )}
+
+          {active === 'design' && selected === 'shape' && (
+            <div className="lv3-settings">
+              <div className="lv3-heading">Thêm hình khối</div>
+              <ShapeTool
+                onAddShape={(shape) => {
+                  const id = `${Date.now()}-${Math.random()}`;
+
+                  setShapeItems((items) => [
+                    ...items,
+                    {
+                      id,
+                      shape,
+                      x: 50,
+                      y: 50,
+                      width: 70,
+                      height: 70,
+                      rotation: 0,
+                    },
+                  ]);
+
+                  setActiveObjectId(id);
+                  setStatus('Đã thêm hình khối vào ảnh');
+                }}
+              />
+            </div>
+          )}
+
+          {active === 'design' && selected === 'sticker' && (
+            <div className="lv3-settings">
+              <div className="lv3-heading">
+                <Sticker size={17} /> Thêm sticker
+              </div>
+              <StickerTool
+                onAddSticker={(sticker) => {
+                  const id = `${Date.now()}-${Math.random()}`;
+
+                  setStickerItems((items) => [
+                    ...items,
+                    {
+                      id,
+                      sticker,
+                      x: 50,
+                      y: 50,
+                      width: 60,
+                      height: 60,
+                      rotation: 0,
+                    },
+                  ]);
+
+                  setActiveObjectId(id);
+                  setStatus('Đã thêm sticker vào ảnh');
+                }}
+              />
+            </div>
+          )}
+
           <div className="lv3-toolbox-footer"><CircleHelp size={16}/> Công cụ có nhãn SAU chưa thực thi.</div>
         </section>
         <section className="lv3-center">
@@ -445,10 +557,85 @@ export default function EditorPage(){
             {projectReady&&<LayersWorkspace projectId={projectId} ready={projectReady} originalAssetId={activeAssetId} originalUrl={image}
               originalName={fileName} canvasWidth={canvasSize.width} canvasHeight={canvasSize.height}
               sourceDocument={projectState} active={layersOpen} onStatus={setStatus}/>}
-            {!layersOpen&&(image?<div className="lv3-image-stage"><img src={image} alt="Ảnh đang chỉnh sửa" style={viewStyle}/></div>:<div className="lv3-empty"><div className="lv3-empty-orb"><ImagePlus size={40}/></div><h2>Bắt đầu với một bức ảnh</h2><p>Thêm ảnh để sử dụng công cụ chỉnh sửa, bộ lọc và xem trước.</p><button onClick={()=>inputRef.current?.click()}><ImagePlus size={18}/> Chọn ảnh từ thiết bị</button><small>JPG, PNG, WebP · Tối đa 20MB</small></div>)}
+            {!layersOpen && (image ? (
+              <div className="lv3-image-stage">
+                <img
+                  src={image}
+                  alt="Ảnh đang chỉnh sửa"
+                  style={viewStyle}
+                />
+
+                {textItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: `${35 + index * 8}%`,
+                      transform: 'translate(-50%, -50%)',
+                      color: '#ffffff',
+                      fontSize: 28,
+                      fontWeight: 700,
+                      textShadow: '0 2px 5px #000000',
+                      pointerEvents: 'none',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {item.text}
+                  </div>
+                ))}
+
+                {shapeItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: 'absolute',
+                      left: `${35 + index * 8}%`,
+                      top: '50%',
+                      width: 70,
+                      height: 70,
+                      border: '3px solid #8b5cf6',
+                      borderRadius:
+                        item.shape === 'circle' ? '50%' :
+                          item.shape === 'ellipse' ? '50%' :
+                            item.shape === 'rounded-rectangle' ? '12px' : '0',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ))}
+
+                {stickerItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: 'absolute',
+                      left: `${60 + index * 8}%`,
+                      top: `${35 + index * 8}%`,
+                      transform: 'translate(-50%, -50%)',
+                      fontSize: 42,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {item.sticker.emoji}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="lv3-empty">
+                <div className="lv3-empty-orb">
+                  <ImagePlus size={40} />
+                </div>
+                <h2>Bắt đầu với một bức ảnh</h2>
+                <p>Thêm ảnh để sử dụng công cụ chỉnh sửa, bộ lọc và xem trước.</p>
+                <button onClick={() => inputRef.current?.click()}>
+                  <ImagePlus size={18} /> Chọn ảnh từ thiết bị
+                </button>
+                <small>JPG, PNG, WebP · Tối đa 20MB</small>
+              </div>
+            ))}
           </div>
           <div className="lv3-bottom"><span className="lv3-message" role="status">{status}</span><div className="lv3-zoom"><button onClick={()=>mutate({zoom:Math.max(40,edits.zoom-10)})} title="Thu nhỏ"><ZoomOut size={17}/></button><b>{edits.zoom}%</b><button onClick={()=>mutate({zoom:Math.min(200,edits.zoom+10)})} title="Phóng to"><ZoomIn size={17}/></button><button onClick={()=>mutate({zoom:100})} title="Về 100%">100%</button></div></div>
-        </section>
+                </section>
       </div>
     </div>
     {versionsOpen&&<div className="n1-versions-overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!versionsBusy)setVersionsOpen(false)}}>

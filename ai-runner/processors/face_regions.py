@@ -26,11 +26,12 @@ PARSING_CLASSES = {
     "SKIN": (1,), "FACE": (1, 2, 3, 4, 5, 6, 10, 11, 12, 13),
     "NOSE": (10,), "EARS": (7, 8), "NECK": (14, 15),
 }
-# Exact FULL V3 enum. TEETH is an explicitly documented heuristic, not an ONNX class.
-CONTRACT_REGIONS = frozenset(PARSING_CLASSES) | {"EYELIDS", "TEETH"}
-# Extension proposal only: requires FE/BE approval and YAML enum update before public use.
-EXPERIMENTAL_REGIONS = frozenset({"LEFT_CHEEK", "RIGHT_CHEEK", "CHEEKS",
-                                  "IRIS", "LEFT_IRIS", "RIGHT_IRIS"})
+# N4 Public V3 Face Regions; TEETH, cheeks and iris are geometry-assisted masks.
+PUBLIC_MAKEUP_REGIONS = frozenset({"LEFT_CHEEK", "RIGHT_CHEEK", "CHEEKS",
+                                 "IRIS", "LEFT_IRIS", "RIGHT_IRIS"})
+CONTRACT_REGIONS = frozenset(PARSING_CLASSES) | {"EYELIDS", "TEETH"} | PUBLIC_MAKEUP_REGIONS
+# All 6 makeup-specific regions are now valid through the authenticated Spring API.
+EXPERIMENTAL_REGIONS = frozenset()
 _ALL_REGIONS = CONTRACT_REGIONS | EXPERIMENTAL_REGIONS
 _MAX_BATCH_PIXELS = 100_000_000
 _MAX_FACES = 10  # Still bounded by underlying MediaPipe configuration (currently five).

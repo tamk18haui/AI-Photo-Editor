@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: N4 Local AI V3 addendum — review/merge into shared contract
+  version: 3.0.1-n4-handoff
+  description: >-
+    This file is standalone handoff material only; it does not replace N3/N1-owned
+    docs/contracts YAML. All routes are Spring Boot routes requiring Bearer JWT.
+servers:
+  - url: /api
+security:
+  - BearerAuth: []
+paths:
+  /ai/local/face-regions:
+    post:
+      summary: Create project-owned 8-bit grayscale mask assets for a selected face
+      tags: [N4-FaceStudio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaceRegionRequest'
+      responses:
+        '200':
+          description: List of masks stored by Cloudinary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceRegionResponse'
+        '401': {description: Missing or expired JWT}
+        '422': {description: Invalid faceIndex, region or outputMode}
+        '502': {description: Invalid upstream mask format}
+  /ai/local/jobs/{jobId}:
+    get:
+      summary: Status for the current user's LOCAL job only
+      tags: [N4-Jobs]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Local job status (including resultAssetId)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobView'}
+        '404': {description: Job missing, not owned or not LOCAL}
+  /ai/local/jobs/{jobId}/cancel:
+    post:
+      summary: Cancel a QUEUED or RUNNING LOCAL job
+      tags: [N4-Jobs]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Updated Local JobView
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobView'}
+        '404': {description: Job missing, not owned or not LOCAL}
+        '409': {description: Job is already terminal}
+  /ai/local/jobs/{jobId}/retry:
+    post:
+      summary: Retry a CANCELLED or FAILED LOCAL job by creating another LOCAL job
+      tags: [N4-Jobs]
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: New queued job ID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobReceipt'}
+        '404': {description: Job missing, not owned or not LOCAL}
+        '409': {description: Job is not FAILED or CANCELLED}
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    JobId:
+      in: path
+      name: jobId
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+  schemas:
+    FaceRegion:
+      type: string
+      enum: [LIPS, UPPER_LIP, LOWER_LIP, HAIR, LEFT_EYE, RIGHT_EYE,
+             EYELIDS, EYEBROWS, LEFT_EYEBROW, RIGHT_EYEBROW, SKIN,
+             FACE, NOSE, TEETH, EARS, NECK, CHEEKS, LEFT_CHEEK,
+             RIGHT_CHEEK, IRIS, LEFT_IRIS, RIGHT_IRIS]
+    FaceRegionRequest:
+      type: object
+      required: [projectId, assetId, faceIndex, regions]
+      properties:
+        projectId: {type: integer, format: int64, minimum: 1}
+        assetId: {type: integer, format: int64, minimum: 1}
+        faceIndex: {type: integer, minimum: 0}
+        regions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/FaceRegion'}
+        baseRevisionId: {type: integer, format: int64, nullable: true}
+        outputMode: {type: string, enum: [REGION_MASK, LABEL_MAP], default: REGION_MASK}
+    FaceMask:
+      type: object
+      required: [region, maskAssetId, width, height, url]
+      properties:
+        region: {$ref: '#/components/schemas/FaceRegion'}
+        maskAssetId: {type: integer, format: int64}
+        width: {type: integer, minimum: 1}
+        height: {type: integer, minimum: 1}
+        url: {type: string, format: uri}
+    FaceRegionResponse:
+      type: object
+      required: [projectId, assetId, faceIndex, masks]
+      properties:
+        projectId: {type: integer, format: int64}
+        assetId: {type: integer, format: int64}
+        faceIndex: {type: integer}
+        masks:
+          type: array
+          items: {$ref: '#/components/schemas/FaceMask'}
+        baseRevisionId: {type: integer, format: int64, nullable: true}
+    JobReceipt:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId: {type: integer, format: int64}
+        status: {type: string, enum: [QUEUED]}
+    JobView:
+      type: object
+      required: [jobId, projectId, type, provider, status]
+      properties:
+        jobId: {type: integer, format: int64}
+        projectId: {type: integer, format: int64}
+        type: {type: string}
+        provider: {type: string, enum: [LOCAL]}
+        status: {type: string, enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED]}
+        progress: {type: integer, nullable: true}
+        stage: {type: string, nullable: true}
+        inputAssetId: {type: integer, format: int64, nullable: true}
+        resultAssetId: {type: integer, format: int64, nullable: true}
+        resultUrl: {type: string, nullable: true}
+        errorCode: {type: string, nullable: true}
+        error: {type: string, nullable: true}
