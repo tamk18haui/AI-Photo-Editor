@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import {
   ArrowLeft, Brush, ChevronLeft, ChevronRight,
   CircleHelp, Cloud, Crop, Download, Eraser, Expand,
@@ -14,6 +15,7 @@ import './editor-modern.css';
 import TextTool from '../features/editor/creative/text/TextTool';
 import ShapeTool, { type ShapeType } from '../features/editor/creative/shapes/ShapeTool';
 import StickerTool, { type StickerItem } from '../features/editor/creative/stickers/StickerTool';
+import GeminiChat from '../features/gemini/GeminiChat';
 type Category = 'template' | 'edit' | 'beauty' | 'design' | 'remove' | 'filters' | 'adjust' | 'effects' | 'background' | 'ai';
 type ToolItem = { id: string; label: string; status?: 'soon'; icon?: typeof Sparkles };
 type CategoryItem = { id: Category; label: string; icon: typeof Sparkles; children: ToolItem[] };
@@ -71,6 +73,14 @@ type Edits = { brightness:number; contrast:number; saturation:number; lux:number
 const initial: Edits = {brightness:100,contrast:100,saturation:100,lux:100,highlights:100,temperature:0,blur:0,rotation:0,flipped:false,zoom:100,ratio:'Tự do',preset:'original'};
 const MAX_BYTES=20*1024*1024;
 
+type PositionedItem = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+};
 export default function EditorPage(){
   const navigate=useNavigate();
   const inputRef=useRef<HTMLInputElement>(null);
@@ -78,25 +88,40 @@ export default function EditorPage(){
   const [active,setActive]=useState<Category>('edit');
   const [selected,setSelected]=useState('crop');
   const [image,setImage]=useState<string|null>(null);
+  const [geminiOpen, setGeminiOpen] = useState(false);
   const [fileName,setFileName]=useState('Chưa có ảnh');
   const [edits,setEdits]=useState<Edits>(initial);
   const [textItems, setTextItems] = useState<
-  { id: string; text: string }[]
->([]);
+    (PositionedItem & { text: string })[]
+  >([]);
 
-const [shapeItems, setShapeItems] = useState<
-  { id: string; shape: ShapeType }[]
->([]);
+  const [shapeItems, setShapeItems] = useState<
+    (PositionedItem & { shape: ShapeType })[]
+  >([]);
 
-const [stickerItems, setStickerItems] = useState<
-  { id: string; sticker: StickerItem }[]
->([]);
+  const [stickerItems, setStickerItems] = useState<
+    (PositionedItem & { sticker: StickerItem })[]
+  >([]);
+
+  const [, setActiveObjectId] = useState<string | null>(null);
   const [past,setPast]=useState<Edits[]>([]);
   const [future,setFuture]=useState<Edits[]>([]);
   const [status,setStatus]=useState('Sẵn sàng chỉnh sửa ảnh');
   const [prompt,setPrompt]=useState('');
   const [isBusy,setBusy]=useState(false);
   const currentCategory=categories.find(x=>x.id===active)!;
+  const currentImageForGemini = async (): Promise<Blob> => {
+    if (!image) {
+      throw new Error('Vui lòng chọn ảnh trước khi sử dụng Gemini.');
+    }
+
+    const response = await fetch(image);
+    if (!response.ok) {
+      throw new Error('Không thể đọc ảnh hiện tại.');
+    }
+
+    return await response.blob();
+  };
 
   useEffect(()=>()=>{if(image?.startsWith('blob:'))URL.revokeObjectURL(image)},[image]);
   const mutate=(patch:Partial<Edits>)=>{
@@ -139,6 +164,14 @@ const [stickerItems, setStickerItems] = useState<
   };
   const handleTool=(id:string)=>{
     setSelected(id);
+        if (id === 'prompt') {
+      if (image) {
+        setGeminiOpen(true);
+      } else {
+        setStatus('Vui lòng chọn ảnh trước khi sử dụng Gemini.');
+      }
+      return;
+    }
     if(id==='rotate')mutate({rotation:(edits.rotation+90)%360});
     if(id==='flip')mutate({flipped:!edits.flipped});
     if(id==='auto')mutate({brightness:108,contrast:108,saturation:110,lux:105});
@@ -177,13 +210,25 @@ const [stickerItems, setStickerItems] = useState<
                   <Type size={17} /> Thêm văn bản
                 </div>
                 <TextTool
-                  onAddText={(text) => {
-                    setTextItems((items) => [
-                      ...items,
-                      { id: `${Date.now()}-${Math.random()}`, text },
-                    ]);
-                    setStatus('Đã thêm văn bản vào ảnh');
-                  }}
+                onAddText={(text) => {
+                  const id = `${Date.now()}-${Math.random()}`;
+
+                  setTextItems((items) => [
+                    ...items,
+                    {
+                      id,
+                      text,
+                      x: 50,
+                      y: 50,
+                      width: 200,
+                      height: 60,
+                      rotation: 0,
+                    },
+                  ]);
+
+                  setActiveObjectId(id);
+                  setStatus('Đã thêm văn bản vào ảnh');
+                }}
                 />
               </div>
             )}
@@ -193,10 +238,22 @@ const [stickerItems, setStickerItems] = useState<
                 <div className="lv3-heading">Thêm hình khối</div>
                 <ShapeTool
                   onAddShape={(shape) => {
-                    setShapeItems((items) => [
-                      ...items,
-                      { id: `${Date.now()}-${Math.random()}`, shape },
-                    ]);
+                  const id = `${Date.now()}-${Math.random()}`;
+
+                  setShapeItems((items) => [
+                    ...items,
+                    {
+                      id,
+                      shape,
+                      x: 50,
+                      y: 50,
+                      width: 70,
+                      height: 70,
+                      rotation: 0,
+                    },
+                  ]);
+
+                  setActiveObjectId(id);
                     setStatus('Đã thêm hình khối vào ảnh');
                   }}
                 />
@@ -210,10 +267,22 @@ const [stickerItems, setStickerItems] = useState<
                 </div>
                 <StickerTool
                   onAddSticker={(sticker) => {
-                    setStickerItems((items) => [
-                      ...items,
-                      { id: `${Date.now()}-${Math.random()}`, sticker },
-                    ]);
+                  const id = `${Date.now()}-${Math.random()}`;
+
+                  setStickerItems((items) => [
+                    ...items,
+                    {
+                      id,
+                      sticker,
+                      x: 50,
+                      y: 50,
+                      width: 60,
+                      height: 60,
+                      rotation: 0,
+                    },
+                  ]);
+
+                  setActiveObjectId(id);
                     setStatus('Đã thêm sticker vào ảnh');
                   }}
                 />
@@ -302,8 +371,22 @@ const [stickerItems, setStickerItems] = useState<
             )}
           </div>
           <div className="lv3-bottom"><span className="lv3-message" role="status">{status}</span><div className="lv3-zoom"><button onClick={()=>mutate({zoom:Math.max(40,edits.zoom-10)})} title="Thu nhỏ"><ZoomOut size={17}/></button><b>{edits.zoom}%</b><button onClick={()=>mutate({zoom:Math.min(200,edits.zoom+10)})} title="Phóng to"><ZoomIn size={17}/></button><button onClick={()=>mutate({zoom:100})} title="Về 100%">100%</button></div></div>
-        </section>
+                </section>
       </div>
     </div>
+
+    {geminiOpen && image && (
+      <GeminiChat
+        originalPreview={image}
+        createSource={currentImageForGemini}
+        onApply={(file) => {
+          const url = URL.createObjectURL(file);
+          setImage(url);
+          setStatus('Đã áp dụng ảnh Gemini vào Editor.');
+          setGeminiOpen(false);
+        }}
+        onClose={() => setGeminiOpen(false)}
+      />
+    )}
   </div>;
 }
