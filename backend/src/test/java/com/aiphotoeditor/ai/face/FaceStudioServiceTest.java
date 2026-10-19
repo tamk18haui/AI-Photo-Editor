@@ -85,7 +85,7 @@ class FaceStudioServiceTest {
     @Test
     void rejectsRegionsOutsideV3ContractBeforeFetchingModel() {
         assertThrows(ApiException.class, () -> service.regions(
-            new FaceStudioController.RegionRequest(7L, 12L, 0, List.of("IRIS"),
+            new FaceStudioController.RegionRequest(7L, 12L, 0, List.of("NOT_A_FACE_REGION"),
                                                    null, "REGION_MASK")));
         verifyNoInteractions(runner, cloudinary);
     }
