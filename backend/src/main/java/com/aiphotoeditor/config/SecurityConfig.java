@@ -1,5 +1,12 @@
 package com.aiphotoeditor.config;
 import com.aiphotoeditor.common.ErrorResponse;
+// N3_ADMIN_V1 live database authorization and account suspension filter
+import com.aiphotoeditor.admin.AdminTrafficService;
+import com.aiphotoeditor.admin.AdminAccountFilter;
+import com.aiphotoeditor.user.UserRepository;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -43,7 +50,7 @@ public class SecurityConfig {
    cors.setMaxAge(3600L);
    var source=new UrlBasedCorsConfigurationSource();source.registerCorsConfiguration("/**",cors);return source;
  }
- @Bean SecurityFilterChain filterChain(HttpSecurity http,ObjectMapper mapper) throws Exception {
+ @Bean SecurityFilterChain filterChain(HttpSecurity http,ObjectMapper mapper, UserRepository users, AdminTrafficService traffic) throws Exception {
    http.csrf(csrf->csrf.disable()).cors(Customizer.withDefaults())
      .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
      .authorizeHttpRequests(a->a
@@ -52,6 +59,16 @@ public class SecurityConfig {
                         "/api/auth/otp/request","/api/auth/otp/reset",
                         "/api/auth/forgot-password","/api/auth/reset-password").permitAll()
        .requestMatchers("/actuator/health","/actuator/info").permitAll()
+       // N3_ADMIN_V1: Reject USER tokens even when the browser exposes the /admin URL.
+       .requestMatchers("/api/admin/**").access((authentication, context) -> {
+         var authResult = authentication.get();
+         if (!(authResult instanceof JwtAuthenticationToken jwt)) return new AuthorizationDecision(false);
+         try {
+           long id = Long.parseLong(jwt.getToken().getSubject());
+           return new AuthorizationDecision(users.findById(id).map(u ->
+             "ACTIVE".equals(u.accountStatus) && "ADMIN".equals(u.accountRole)).orElse(false));
+         } catch (NumberFormatException e) { return new AuthorizationDecision(false); }
+       })
        .anyRequest().authenticated())
      .oauth2ResourceServer(o->o.jwt(Customizer.withDefaults()).authenticationEntryPoint((req,res,e)->{
         res.setStatus(401);res.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -64,6 +81,8 @@ public class SecurityConfig {
          res.setStatus(403);res.setContentType(MediaType.APPLICATION_JSON_VALUE);
          res.getWriter().write(mapper.writeValueAsString(ErrorResponse.of(403,"FORBIDDEN","Access denied")));
        }));
+   // All authenticated API requests honor immediate account suspension.
+   http.addFilterAfter(new AdminAccountFilter(users,traffic,mapper), BearerTokenAuthenticationFilter.class);
    return http.build();
  }
 }

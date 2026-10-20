@@ -8,6 +8,7 @@ import { authApi } from '../services/authApi';
 import PasswordStrengthHint from '../components/PasswordStrengthHint';
 import { isStrongPassword } from '../utils/passwordPolicy';
 import { authSession } from '../services/authSession';
+import { adminLanding } from '../services/adminApi'; // N3_ADMIN_V1
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
 import {
@@ -54,7 +55,7 @@ export default function LoginPage() {
   const [activeSlide, setActiveSlide] = useState(0);
 
   const onGoogleDone = useCallback(() => {
-    navigate('/projects', { replace: true });
+    void adminLanding(navigate);
   }, [navigate]);
   const onGoogleError = useCallback((message: string) => {
     setNotice(message);
@@ -205,7 +206,7 @@ export default function LoginPage() {
       setConfirm('');
 
       // Chuyển sang danh sách dự án
-      navigate('/projects', { replace: true });
+      void adminLanding(navigate);
     } catch (error) {
       handleApiError(error);
     } finally {

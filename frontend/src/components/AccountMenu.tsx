@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import axios from 'axios';
-import { CircleUserRound, KeyRound, LogOut, UserRound, X, Link2, Eye, EyeOff, Save } from 'lucide-react';
+import { CircleUserRound, KeyRound, LogOut, UserRound, X, Link2, Eye, EyeOff, Save, ShieldCheck } from 'lucide-react'; // N3_ADMIN_V1
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { authSession } from '../services/authSession';
@@ -31,6 +31,7 @@ export default function AccountMenu() {
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adminVisible, setAdminVisible] = useState(false); // N3_ADMIN_V1
 
   const clearSecretFields = () => {
     setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowPassword(false);
@@ -40,6 +41,7 @@ export default function AccountMenu() {
   const openMenu = () => {
     if (open) { close(); return; }
     setOpen(true); setView('menu'); setMessage(''); setSuccess(false);
+    void apiClient.get('/admin/me').then(() => setAdminVisible(true)).catch(() => setAdminVisible(false));
     void apiClient.get<Profile>('/users/me').then(({data}) => {
       setProfile(data); setDisplayName(data.displayName ?? '');
     }).catch((error: unknown) => {
@@ -131,6 +133,7 @@ export default function AccountMenu() {
         <button type="button" style={actionStyle} onClick={()=>{setView('profile');setMessage('');setSuccess(false)}}>
           <UserRound size={17}/> Thông tin tài khoản
         </button>
+        {adminVisible && <Link to="/admin" onClick={close} style={actionStyle}><ShieldCheck size={17}/> Báº£ng Ä‘iá»u khiá»ƒn Admin</Link>}
         <button type="button" style={actionStyle} onClick={()=>{setView('password');setMessage('');setSuccess(false)}}>
           <KeyRound size={17}/> Đổi mật khẩu
         </button>
