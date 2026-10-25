@@ -53,6 +53,43 @@ public class AiJobService {
         return receipt(job);
     }
 
+    /** N5 jobs reuse the exact same AI_JOBS table, project guard and event channel. */
+    @Transactional
+    public AiJobResponse createGemini(long projectId, Long assetId, String operation,
+                                      JsonNode params, String idempotencyKey) {
+        access.requireMine(projectId);
+        if (assetId != null) assets.requireMine(projectId, assetId);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            if (idempotencyKey.length() > 120 || !idempotencyKey.matches("[a-zA-Z0-9._:-]+")) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", "Invalid idempotency key");
+            }
+            var previous = repository.findByCreatedByUserIdAndProjectIdAndIdempotencyKey(
+                    access.currentUserId(), projectId, idempotencyKey);
+            if (previous.isPresent()) {
+                AiJob existing = previous.get();
+                if (!"GEMINI".equals(existing.provider) || !operation.equals(existing.type)
+                        || !java.util.Objects.equals(existing.inputAssetId, assetId)
+                        || !java.util.Objects.equals(existing.paramsJson, params)) {
+                    throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", "Request key already used for different parameters");
+                }
+                return receipt(existing);
+            }
+        }
+        AiJob job = new AiJob();
+        job.projectId = projectId;
+        job.createdByUserId = access.currentUserId();
+        job.inputAssetId = assetId;
+        job.idempotencyKey = idempotencyKey;
+        job.type = operation;
+        job.provider = "GEMINI";
+        job.status = AiJobStatus.QUEUED;
+        job.stage = "QUEUED";
+        job.paramsJson = params == null ? null : params.deepCopy();
+        job = repository.saveAndFlush(job);
+        publish(job);
+        return receipt(job);
+    }
+
     /** Function: Protect secondary images/masks from cross-project IDOR attacks. */
     private void validateSecondaryAsset(long projectId, JsonNode params, String field) {
         if (params == null || !params.hasNonNull(field)) return;
@@ -107,8 +144,20 @@ public class AiJobService {
     /** Function: Retry only terminal unsuccessful jobs by creating a new job. */
     @Transactional
     public AiJobResponse retry(long jobId) {
+        return retry(jobId, false);
+    }
+
+    @Transactional
+    public AiJobResponse retry(long jobId, boolean paidOperationConfirmed) {
         AiJob job = mine(jobId);
         if (job.status != AiJobStatus.FAILED && job.status != AiJobStatus.CANCELLED) throw invalidState();
+        if ("GEMINI".equals(job.provider)) {
+            if ("NATURAL_EDIT".equals(job.type) || "BATCH".equals(job.type)) throw invalidState();
+            if (!paidOperationConfirmed) throw new ApiException(HttpStatus.PAYMENT_REQUIRED,
+                    "GEMINI_IMAGE_CONFIRMATION_REQUIRED", "Confirm additional Gemini Image API charges before retry");
+            // A retry is a new, explicit billable request; never reuse the previous key.
+            return createGemini(job.projectId, job.inputAssetId, job.type, job.paramsJson, null);
+        }
         if (job.inputAssetId == null) throw invalidState();
         return create(job.projectId, job.inputAssetId, AiJobType.valueOf(job.type), job.paramsJson);
     }
@@ -116,7 +165,16 @@ public class AiJobService {
     /** Function: Atomically claim the oldest queued local job for one worker. */
     @Transactional
     public Optional<AiJob> claim() {
-        var candidate = repository.findFirstByStatusAndProviderOrderByCreatedAtAsc(AiJobStatus.QUEUED, "LOCAL");
+        return claimProvider("LOCAL");
+    }
+
+    @Transactional
+    public Optional<AiJob> claimGemini() {
+        return claimProvider("GEMINI");
+    }
+
+    private Optional<AiJob> claimProvider(String provider) {
+        var candidate = repository.findFirstByStatusAndProviderOrderByCreatedAtAsc(AiJobStatus.QUEUED, provider);
         if (candidate.isEmpty()) return Optional.empty();
         AiJob job = candidate.get();
         job.status = AiJobStatus.RUNNING;
@@ -126,6 +184,16 @@ public class AiJobService {
         repository.saveAndFlush(job);
         publish(job);
         return Optional.of(job);
+    }
+
+    /** Stage names represent actual work; no fabricated percentage is sent. */
+    @Transactional
+    public void stage(long jobId, String stage) {
+        AiJob job = loadWorker(jobId);
+        if (job.status != AiJobStatus.RUNNING) return;
+        job.stage = stage;
+        repository.saveAndFlush(job);
+        publish(job);
     }
 
     /** Function: Inspect worker-owned job without relying on the web security context. */
@@ -170,6 +238,17 @@ public class AiJobService {
     public int recover() {
         int count = 0;
         for (AiJob job : repository.findByStatus(AiJobStatus.RUNNING)) {
+            if ("GEMINI".equals(job.provider)) {
+                // The remote request may have been billed before restart; never silently replay it.
+                job.status = AiJobStatus.FAILED;
+                job.errorCode = "GEMINI_RESTARTED";
+                job.errorMessage = "Worker restarted. Review before explicitly retrying.";
+                job.stage = "FAILED";
+                job.finishedAt = Instant.now();
+                repository.save(job);
+                publish(job);
+                continue;
+            }
             if (!"LOCAL".equals(job.provider)) continue;
             job.status = AiJobStatus.QUEUED;
             job.stage = "RECOVERED";

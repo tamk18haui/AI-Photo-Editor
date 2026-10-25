@@ -1,0 +1,168 @@
+openapi: 3.0.3
+info:
+  title: AI Photo Editor N5 V3 API Addendum
+  version: 3.0.0-n5
+  description: Supplement to the team's existing contract; all endpoints require bearer JWT.
+servers:
+  - url: /api
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    JobReceipt:
+      type: object
+      properties:
+        jobId: {type: integer, format: int64}
+        status: {type: string}
+    OperationRequest:
+      type: object
+      required: [projectId, inputAssetId, prompt, operation]
+      properties:
+        projectId: {type: integer, format: int64}
+        inputAssetId: {type: integer, format: int64}
+        prompt: {type: string, maxLength: 1500}
+        operation: {type: string, enum: [GENERATIVE_EDIT, REMOVE, REPLACE, BACKGROUND, FILL, EXPAND, RELIGHT, HAIRSTYLE]}
+        maskAssetId: {type: integer, format: int64}
+        baseStateVersion: {type: integer, format: int64}
+        idempotencyKey: {type: string, maxLength: 120}
+        paidOperationConfirmed:
+          type: boolean
+          description: Must be true only following explicit user acknowledgement of possible Gemini Image API charges.
+    EditPlan:
+      type: object
+      required: [steps]
+      properties:
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: object
+            required: [order, executor, tool, arguments]
+            properties:
+              order: {type: integer, minimum: 1}
+              executor: {type: string, enum: [FRONTEND, LOCAL_AI, GEMINI_IMAGE]}
+              tool: {type: string}
+              arguments: {type: object}
+paths:
+  /ai/gemini/projects/{projectId}/context:
+    get:
+      summary: Get authoritative Project State version
+      parameters:
+        - {in: path, name: projectId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Project context}
+  /ai/gemini/operations:
+    post:
+      summary: Queue generative image edit from a Project owned image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OperationRequest'}
+      responses:
+        '202': {description: Queued, content: {application/json: {schema: {$ref: '#/components/schemas/JobReceipt'}}}}
+        '402': {description: Gemini Image cost confirmation required}
+        '409': {description: Stale Project or idempotency conflict}
+  /ai/gemini/text-to-image:
+    post:
+      summary: Queue image generation without source asset; requires paidOperationConfirmed true
+      responses:
+        '202': {description: Job queued}
+        '402': {description: Gemini Image cost confirmation required}
+  /ai/gemini/jobs/{jobId}/apply:
+    post:
+      summary: Explicit atomic attach and History commit via N3
+      parameters:
+        - {in: path, name: jobId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Layer and History receipt}
+        '409': {description: Job incomplete or stale State version}
+  /ai/jobs:
+    get:
+      summary: List only the current user's jobs
+      responses:
+        '200': {description: Job views}
+  /ai/jobs/{jobId}:
+    get:
+      summary: Job status and preview resultAssetId
+      parameters:
+        - {in: path, name: jobId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Job view}
+  /ai/jobs/{jobId}/events:
+    get:
+      summary: Authenticated SSE job stream (fetch with Authorization header)
+      parameters:
+        - {in: path, name: jobId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: text/event-stream, content: {text/event-stream: {schema: {type: string}}}}
+  /ai/jobs/{jobId}/cancel:
+    post:
+      summary: Cancel queued or running job
+      parameters:
+        - {in: path, name: jobId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Cancelled Job view}
+  /ai/jobs/{jobId}/retry:
+    post:
+      summary: Retry explicitly as a NEW job; Gemini requires paidOperationConfirmed true
+      parameters:
+        - {in: path, name: jobId, required: true, schema: {type: integer}}
+      responses:
+        '202': {description: New job ID}
+        '402': {description: Confirmation required for a new paid Gemini Image attempt}
+  /natural-edit/plan:
+    post:
+      summary: Built-in zero-API command parser first; Gemini Text fallback for ambiguous commands
+      responses:
+        '200': {description: Typed EditPlan proposal with plannerSource BUILT_IN_TOOLS or GEMINI_TEXT}
+  /natural-edit/execute:
+    post:
+      summary: Auto-execute tool-only plans; paidOperationConfirmed mandatory if any GEMINI_IMAGE step
+      responses:
+        '202': {description: Durable Natural Edit run with next step}
+        '402': {description: Paid image operation requires explicit separate cost confirmation}
+  /natural-edit/runs/{runId}:
+    get:
+      parameters:
+        - {in: path, name: runId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Current run and pending step}
+  /natural-edit/runs/{runId}/advance:
+    post:
+      summary: Acknowledge completed frontend asset or completed AI child job
+      parameters:
+        - {in: path, name: runId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Next action or preview-ready run}
+  /natural-edit/runs/{runId}/cancel:
+    post:
+      summary: Cancel persisted Natural Edit parent run and its pending AI child job
+      parameters:
+        - {in: path, name: runId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Cancelled or already terminal Natural Edit run}
+  /ai/batches:
+    post:
+      summary: Queue up to eight authorized Gemini inputs; requires paidOperationConfirmed true
+      responses:
+        '202': {description: Batch parent and child jobs}
+        '402': {description: Gemini Image cost confirmation required}
+  /ai/batches/{batchId}:
+    get:
+      parameters:
+        - {in: path, name: batchId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Aggregate batch status}
+  /ai/batches/{batchId}/cancel:
+    post:
+      parameters:
+        - {in: path, name: batchId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Cancelled batch status}

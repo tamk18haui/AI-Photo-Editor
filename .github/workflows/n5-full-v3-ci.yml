@@ -1,0 +1,55 @@
+name: N5 Full V3 CI
+
+on:
+  push:
+    branches: [feature/n5-full-v3]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: ai_photo_editor
+          MYSQL_ROOT_PASSWORD: testonly_mysql_pwd
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptestonly_mysql_pwd"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      DB_URL: jdbc:mysql://127.0.0.1:3306/ai_photo_editor?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC
+      DB_USER: root
+      DB_PASSWORD: testonly_mysql_pwd
+      JWT_SIGNING_SECRET: TEST_ONLY_GITHUB_ACTIONS_N5_JWT_SECRET_2026_10_25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Maven full test suite
+        run: mvn -B -f backend/pom.xml test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
