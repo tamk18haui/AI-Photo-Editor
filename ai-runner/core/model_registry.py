@@ -5,6 +5,7 @@ from core.config import WEIGHTS
 MODELS = {
     "realesrgan_x2": "realesrgan/RealESRGAN_x2plus.pth",
     "realesrgan_x4": "realesrgan/RealESRGAN_x4plus.pth",
+    "realesrgan_x4_fast": "realesrgan/realesr-general-x4v3.pth",
     "birefnet": "birefnet/model.safetensors",
     "face_parsing": "face_parsing/resnet34.onnx",
     "sam": "sam/sam_vit_b_01ec64.pth",

@@ -4,6 +4,7 @@ import json
 import logging
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import Response, JSONResponse
+from starlette.concurrency import run_in_threadpool
 from core import config
 from core.errors import RunnerError
 from core.image_io import decode, to_png
@@ -75,8 +76,12 @@ async def process(operation: str, file: UploadFile = File(...), params: str = Fo
     if selection is not None and selection.size != image.size:
         raise RunnerError("MASK_DIMENSION_MISMATCH", "Mask dimensions must equal current source image", 422)
     try:
-        result = execute(operation, image, options, selection, backdrop)
-        return Response(content=to_png(result), media_type="image/png")
+        # Heavy PyTorch inference must not block Uvicorn's async event loop:
+        # /health and other HTTP requests should remain responsive during x4.
+        result = await run_in_threadpool(execute, operation, image, options, selection, backdrop)
+        # Encoding a multi-megapixel x4 PNG is also CPU-heavy.
+        payload = await run_in_threadpool(to_png, result)
+        return Response(content=payload, media_type="image/png")
     except RunnerError:
         raise
     except Exception:

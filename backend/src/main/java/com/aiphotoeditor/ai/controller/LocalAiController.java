@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.util.Arrays;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +37,8 @@ public class LocalAiController {
             @NotNull @Min(1) Long projectId,
             @NotNull @Min(1) Long assetId,
             @NotNull @Min(2) @Max(4) Integer scale,
-            @Min(0) @Max(2048) Integer tileSize) {}
+            @Min(0) @Max(2048) Integer tileSize,
+            @Pattern(regexp = "fast|quality") String model) {}
 
     public record RemoveBackgroundRequest(
             @NotNull @Min(1) Long projectId,
@@ -73,7 +75,8 @@ public class LocalAiController {
                         request.projectId(),
                         request.assetId(),
                         request.scale(),
-                        request.tileSize()));
+                        request.tileSize(),
+                        request.model()));
     }
 
     @PostMapping("/remove-background")

@@ -6,6 +6,8 @@ import { ArrowRight, Clock3, Copy, FolderOpen, ImagePlus, Layers3, LoaderCircle,
 import SiteHeader from '../layouts/SiteHeader';
 import { authSession } from '../services/authSession';
 import { projectApi } from '../services/projectApi';
+import { assetApi } from '../services/assetApi';
+import { editorStateApi } from '../services/editorStateApi';
 import type { Project, ProjectSort } from '../services/projectApi';
 import '../styles/projects-n1.css';
 
@@ -43,6 +45,7 @@ export default function ProjectsPage() {
   const [width, setWidth] = useState(1920);
   const [height, setHeight] = useState(1080);
   const [revision, setRevision] = useState(0);
+  const [starterFile,setStarterFile] = useState<File|null>(null);
 
   useEffect(() => {
     if (!authSession.isLoggedIn()) { navigate('/login', {replace:true}); return; }
@@ -74,8 +77,21 @@ export default function ProjectsPage() {
 
   const refresh = () => setRevision(v => v+1);
   const openCreate = () => {
-    setSelected(null);setName('Dự án mới');setWidth(1920);setHeight(1080);
+    setSelected(null);setName('Dự án mới');setWidth(1920);setHeight(1080);setStarterFile(null);
     setError('');setDialog('create');
+  };
+  const selectStarterFile = async (file:File|null) => {
+    if(!file){setStarterFile(null);return;}
+    if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024){setError('Chọn ảnh JPG/PNG/WebP tối đa 20 MB.');return;}
+    const url=URL.createObjectURL(file);
+    try {
+      const size=await new Promise<{w:number;h:number}>((resolve,reject)=>{
+        const img=new Image();img.onload=()=>resolve({w:img.naturalWidth,h:img.naturalHeight});img.onerror=()=>reject(new Error('Không đọc được ảnh'));img.src=url;
+      });
+      if(size.w<1||size.h<1||size.w>12000||size.h>12000){setError('Ảnh phải có kích thước từ 1 đến 12.000 px mỗi chiều.');return;}
+      setStarterFile(file);setWidth(size.w);setHeight(size.h);setError('');
+    } catch {setError('Không đọc được kích thước ảnh. Hãy chọn file khác.');}
+    finally {URL.revokeObjectURL(url);}
   };
   const openRename = (p: Project) => {setSelected(p);setName(p.name);setError('');setDialog('rename');};
   const openDelete = (p: Project) => {setSelected(p);setError('');setDialog('delete');};
@@ -84,6 +100,7 @@ export default function ProjectsPage() {
     event.preventDefault();
     const cleaned = name.trim();
     if (!cleaned || cleaned.length > 150) {setError('Tên dự án phải có 1–150 ký tự.');return;}
+    if (dialog === 'create' && !starterFile){setError('Cần chọn ảnh trước khi tạo Project.');return;}
     if (dialog === 'create' && (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || width > 12000 || height < 1 || height > 12000)) {
       setError('Chiều rộng và chiều cao phải từ 1 đến 12000 px.');return;
     }
@@ -91,6 +108,19 @@ export default function ProjectsPage() {
     try {
       if (dialog === 'create') {
         const p = await projectApi.create({name:cleaned,canvasWidth:width,canvasHeight:height});
+        try {
+          const uploaded=await assetApi.upload(p.id,starterFile!,'ORIGINAL');
+          const latest=await editorStateApi.load(p.id);
+          const editor=latest.n1Editor && typeof latest.n1Editor==='object' && !Array.isArray(latest.n1Editor)
+            ? latest.n1Editor as Record<string,unknown> : {};
+          await editorStateApi.save(p.id,{...latest,n1Editor:{...editor,activeAssetId:uploaded.assetId}});
+          try {await assetApi.setProjectThumbnail(p.id,uploaded.assetId);}
+          catch(e){console.warn('Thumbnail will be retried by Editor',e);}
+        } catch(err){
+          console.error('Original upload failed after Project creation',err);
+          // Do not silently delete a valid Project. Editor can retry its initial upload.
+          setNotice('Dự án đã tạo nhưng tải ảnh gốc thất bại. Chọn lại ảnh khi mở Editor.');
+        }
         setDialog(null);navigate(`/editor/${p.id}`);return;
       }
       if (dialog === 'rename' && selected) {
@@ -164,12 +194,18 @@ export default function ProjectsPage() {
         <div className="lum-project-modal-buttons"><button onClick={close} disabled={busy}>Hủy</button><button className="destructive" onClick={()=>void remove()} disabled={busy}>{busy?'Đang xóa...':'Xóa vĩnh viễn'}</button></div></>
       : <form onSubmit={e=>void save(e)} className="lum-project-modal-form">
           <label>Tên dự án<input required autoFocus maxLength={150} value={name} onChange={e=>setName(e.target.value)}/></label>
-          {dialog==='create'&&<div className="lum-project-size">
-            <label>Chiều rộng (px)<input type="number" min={1} max={12000} required value={width} onChange={e=>setWidth(Number(e.target.value))}/></label>
-            <label>Chiều cao (px)<input type="number" min={1} max={12000} required value={height} onChange={e=>setHeight(Number(e.target.value))}/></label>
-          </div>}
+          {dialog==='create'&&<>
+            <label className="v43-starter-file">Chọn ảnh gốc trước khi tạo Project
+              <input type="file" accept="image/png,image/jpeg,image/webp" required onChange={e=>void selectStarterFile(e.target.files?.[0]||null)}/>
+              <small>{starterFile?`Đã chọn: ${starterFile.name} · ${width}×${height}px`:'Ảnh sẽ quyết định kích thước làm việc, không tạo nền trống trước.'}</small>
+            </label>
+            <div className="lum-project-size">
+              <label>Chiều rộng ảnh (px)<input type="number" readOnly value={width}/></label>
+              <label>Chiều cao ảnh (px)<input type="number" readOnly value={height}/></label>
+            </div>
+          </>}
           {error&&<p className="lum-project-alert">{error}</p>}
-          <div className="lum-project-modal-buttons"><button type="button" onClick={close} disabled={busy}>Hủy</button><button className="save" type="submit" disabled={busy}>{busy?'Đang lưu...':dialog==='create'?'Tạo và mở Editor':'Lưu tên'}</button></div>
+          <div className="lum-project-modal-buttons"><button type="button" onClick={close} disabled={busy}>Hủy</button><button className="save" type="submit" disabled={busy}>{busy?'Đang lưu...':dialog==='create'?'Tạo dự án với ảnh gốc':'Lưu tên'}</button></div>
         </form>}
     </div></div>}
   </div>;
