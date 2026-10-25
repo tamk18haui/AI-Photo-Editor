@@ -112,6 +112,57 @@ class AiResultLayerServiceTest {
     }
 
     @Test
+    void applyingNaturalEditHidesPreviousImageLayersButPreservesThemForUndo() throws Exception {
+        AiJob job = completedJob();
+        job.provider = "GEMINI";
+        job.type = "NATURAL_EDIT";
+        JsonNode original = mapper.readTree("""
+            {"objects":[{"id":"original","type":"image","visible":true},
+                        {"id":"caption","type":"textbox","visible":true}],
+             "n1Composition":{"version":1,"layers":[
+               {"id":"photo-1","assetId":24,"url":"https://example.test/photo.png","visible":true,"rotation":90},
+               {"id":"photo-2","assetId":44,"url":"https://example.test/overlay.png","visible":true}],
+               "creative":[{"id":"text-1","kind":"text","value":"Keep me"}],
+               "background":{"type":"transparent"}},
+             "n1Editor":{"activeAssetId":24,"edits":{"zoom":100}}}
+            """);
+        var row = new EditorStateEntity();
+        row.stateVersion = 2L;
+        when(jobs.mine(90L)).thenReturn(job);
+        when(assets.requireMine(77L,25L)).thenReturn(resultAsset());
+        when(em.find(EditorStateEntity.class, 77L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(row);
+        when(projects.getState(77L)).thenReturn(original);
+        when(history.snapshot(eq(77L), any(CreateVersionRequest.class)))
+                .thenReturn(new ProjectVersion(1L,77L,"before",Instant.now()),
+                            new ProjectVersion(2L,77L,"after",Instant.now()));
+        when(projects.saveState(eq(77L), any(JsonNode.class)))
+                .thenReturn(new SaveStateResponse(77L,Instant.now(),3L));
+
+        service.attach(77L, new AttachAiJobResultRequest(90L,"Gemini NATURAL_EDIT",true,1.0));
+
+        var saved = ArgumentCaptor.forClass(JsonNode.class);
+        verify(projects).saveState(eq(77L), saved.capture());
+        JsonNode updated = saved.getValue();
+        assertFalse(updated.path("objects").get(0).path("visible").asBoolean());
+        assertTrue(updated.path("objects").get(1).path("visible").asBoolean());
+        assertTrue(updated.path("objects").get(2).path("visible").asBoolean());
+        JsonNode layers = updated.path("n1Composition").path("layers");
+        assertEquals(3, layers.size());
+        assertFalse(layers.get(0).path("visible").asBoolean());
+        assertFalse(layers.get(1).path("visible").asBoolean());
+        assertTrue(layers.get(2).path("visible").asBoolean());
+        assertEquals(90, layers.get(0).path("rotation").asInt(), "Keep original transform for Undo");
+        assertEquals(25, layers.get(2).path("assetId").asInt());
+        assertEquals("Keep me", updated.path("n1Composition").path("creative").get(0).path("value").asText());
+        assertEquals("transparent", updated.path("n1Composition").path("background").path("type").asText());
+        assertEquals(25, updated.path("n1Composition").path("primaryAssetId").asInt());
+        assertEquals(25, updated.path("n1Editor").path("activeAssetId").asInt());
+        assertEquals(100, updated.path("n1Editor").path("edits").path("zoom").asInt());
+        assertTrue(original.path("n1Composition").path("layers").get(0).path("visible").asBoolean(),
+                "Source snapshot must remain unchanged");
+    }
+
+    @Test
     void repeatedRequestDoesNotDuplicateLayerOrHistory() throws Exception {
         var row = new EditorStateEntity();
         row.stateVersion = 9L;

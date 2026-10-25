@@ -19,7 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Calls Google's native image-editing model directly; never touches N4/Local AI/jobs. */
+/** Server-only Gemini image provider. The async worker owns jobs and saved result assets. */
 @Service
 public class GeminiImageService {
     private static final int MAX_SOURCE_BYTES = 20 * 1024 * 1024;
@@ -50,20 +50,9 @@ public class GeminiImageService {
     public record GeminiEditResponse(String mimeType, String imageBase64, String message) { }
 
     public GeminiEditResponse edit(String prompt, MultipartFile image) {
-        String instruction = prompt == null ? "" : prompt.trim();
-        if (instruction.isEmpty() || instruction.length() > 1500) {
-            throw bad("GEMINI_INVALID_PROMPT", "Prompt must contain 1-1500 characters");
-        }
         if (image == null || image.isEmpty() || image.getSize() > MAX_SOURCE_BYTES) {
             throw bad("GEMINI_INVALID_IMAGE", "Image must be between 1 byte and 20 MiB");
         }
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GEMINI_NOT_CONFIGURED", "Missing server-side GEMINI_API_KEY");
-        }
-        if (!ALLOWED_MODELS.contains(model)) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GEMINI_INVALID_MODEL", "Unsupported Gemini image model");
-        }
-
         final byte[] bytes;
         try {
             bytes = image.getBytes();
@@ -74,13 +63,42 @@ public class GeminiImageService {
         if (!mime.equals(image.getContentType())) {
             throw bad("GEMINI_INVALID_IMAGE", "Image MIME type does not match file data");
         }
+        return generateImage(prompt, bytes, mime, null);
+    }
+
+    /** Accepts optional input/mask. Null input is a genuine text-to-image request. */
+    public GeminiEditResponse generateImage(String prompt, byte[] source, String mime, byte[] mask) {
+        String instruction = prompt == null ? "" : prompt.trim();
+        if (instruction.isEmpty() || instruction.length() > 1800) {
+            throw bad("GEMINI_INVALID_PROMPT", "Prompt must contain 1-1800 characters");
+        }
+        if (source != null && (source.length == 0 || source.length > MAX_SOURCE_BYTES || !sniff(source).equals(mime))) {
+            throw bad("GEMINI_INVALID_IMAGE", "Unsupported source image");
+        }
+        if (mask != null && (source == null || mask.length == 0 || mask.length > MAX_SOURCE_BYTES
+                || !"image/png".equals(sniff(mask)))) {
+            throw bad("GEMINI_INVALID_MASK", "Mask must be a PNG with a source image");
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GEMINI_NOT_CONFIGURED", "Missing server-side GEMINI_API_KEY");
+        }
+        if (!ALLOWED_MODELS.contains(model)) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GEMINI_INVALID_MODEL", "Unsupported Gemini image model");
+        }
         try {
             ObjectNode root = mapper.createObjectNode();
             ArrayNode parts = mapper.createArrayNode();
             parts.addObject().put("text", instruction);
-            ObjectNode inline = parts.addObject().putObject("inline_data");
-            inline.put("mime_type", mime);
-            inline.put("data", Base64.getEncoder().encodeToString(bytes));
+            if (source != null) {
+                ObjectNode inline = parts.addObject().putObject("inline_data");
+                inline.put("mime_type", mime);
+                inline.put("data", Base64.getEncoder().encodeToString(source));
+            }
+            if (mask != null) {
+                parts.addObject().putObject("inline_data")
+                        .put("mime_type", "image/png")
+                        .put("data", Base64.getEncoder().encodeToString(mask));
+            }
             root.putArray("contents").addObject().put("role", "user").set("parts", parts);
             root.putObject("generationConfig").putArray("responseModalities").add("TEXT").add("IMAGE");
 
@@ -94,6 +112,9 @@ public class GeminiImageService {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 429) {
                 throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "GEMINI_RATE_LIMIT", "Gemini rate limit reached; try later");
+            }
+            if (response.statusCode() == 503 || response.statusCode() == 502) {
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GEMINI_UNAVAILABLE", "Gemini is temporarily unavailable");
             }
             if (response.statusCode() / 100 != 2) {
                 // Do not echo upstream body or API key to the browser.

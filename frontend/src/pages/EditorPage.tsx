@@ -14,9 +14,11 @@ import {
   Redo2, RotateCw, Save, SlidersHorizontal, History, BookmarkPlus,
   Sparkles, Sticker, Type, Undo2, WandSparkles, ZoomIn, ZoomOut,
 } from 'lucide-react';
-import GeminiChat from '../features/gemini/GeminiChat';
+import GeminiChat from '../features/gemini/GeminiFullChat';
+import type { Step } from '../features/gemini/geminiJobsApi';
 import LocalAiPanel from '../features/localai/LocalAiPanel';
 import LayersWorkspace, { readComposition, TEXT_FONT_STYLES } from '../layouts/LayersWorkspace';
+import type { N5LayerBridge } from '../layouts/LayersWorkspace';
 import { localAiApi } from '../services/localAiApi';
 import { FILTER_PRESETS, FRAME_PRESETS } from '../layouts/editor-presets';
 import type { LocalAiJob, LocalAiOperation } from '../services/localAiApi';
@@ -112,7 +114,7 @@ export default function EditorPage(){
   const [groupFilterCommand,setGroupFilterCommand]=useState<{seq:number;filter:string}|null>(null);
   const [backgroundCommand,setBackgroundCommand]=useState<{seq:number;type:'color'|'image'|'transparent';color?:string}|null>(null);
   const [backgroundSelection,setBackgroundSelection]=useState<{type:'color'|'image'|'transparent';color:string;url?:string}>({type:'transparent',color:'#ffffff'});
-  const layersBridgeRef=useRef<{flush:()=>Promise<void>;prepare:()=>Promise<void>;resume:()=>void;pickImage:()=>void;pickBackground:()=>void}>({flush:async()=>{},prepare:async()=>{},resume:()=>{},pickImage:()=>{},pickBackground:()=>{}});
+  const layersBridgeRef=useRef<N5LayerBridge>({flush:async()=>{},prepare:async()=>{},resume:()=>{},renderPng:async()=>{throw new Error('Canvas chưa sẵn sàng');},pickImage:()=>{},pickBackground:()=>{},applyCommands:async()=>{throw new Error('Editor chưa sẵn sàng');},previewCommands:async()=>{throw new Error('Editor chưa sẵn sàng');}});
   const [layerCanUndo,setLayerCanUndo]=useState(false);
   const [layerCanRedo,setLayerCanRedo]=useState(false);
   const [toolboxCollapsed,setToolboxCollapsed]=useState(false);
@@ -149,6 +151,7 @@ export default function EditorPage(){
   };
   const [canvasSize,setCanvasSize]=useState({width:1024,height:1024});
   const [geminiOpen, setGeminiOpen] = useState(false);
+  const [projectRefresh,setProjectRefresh]=useState(0);
   const [fileName,setFileName]=useState('Chưa có ảnh');
   const [edits,setEdits]=useState<Edits>(initial);
   const [textItems] = useState<
@@ -253,7 +256,7 @@ export default function EditorPage(){
         if(activeRequest){setProjectReady(false);setStatus('Không tải được Project. Kiểm tra quyền truy cập hoặc Backend.');}
       });
     return ()=>{activeRequest=false;};
-  },[projectId,navigate]);
+  },[projectId,navigate,projectRefresh]);
 
   const saveToProject=async()=>{
     if(!projectReady || !autosaveReady || !projectState || assetBusy || !Number.isSafeInteger(projectId)) return;
@@ -373,6 +376,7 @@ export default function EditorPage(){
   };
   const currentImageForGemini=async ():Promise<Blob>=>{
     if(!image)throw new Error('Hãy chọn ảnh trước.');
+    if(projectReady) return layersBridgeRef.current.renderPng();
     return new Promise<Blob>((resolve,reject)=>{
       const img=new Image();
       img.crossOrigin='anonymous';
@@ -614,7 +618,10 @@ export default function EditorPage(){
           {active==='template'&&<div className="n1-template-grid">{FRAME_PRESETS.map(({id,name})=><button key={id} onClick={()=>handleTool('frame-'+id)}><span className={'n1-template-preview n1-frame-'+id}><span/></span><strong>{name}</strong></button>)}</div>}
           {active==='filters'&&<div className="v43-filter-sections"><p className="v45-mode-hint"><b>Bộ lọc toàn bố cục</b>: ảnh chính, ảnh chèn, nền, chữ, sticker và khung được xem như một hình duy nhất khi lọc/xuất. Layer vẫn chỉnh được ở bên phải.</p>{[...new Set(presets.map(p=>p.group))].map(group=><section key={group}><h3>{group}</h3><div className="lv3-filters-grid">{presets.filter(p=>p.group===group).map(p=><button key={p.id} onClick={()=>handleTool(p.id)} className={edits.preset===p.id?'chosen':''}><span className="lv3-filter-thumb">{image?<img src={image} alt="" style={{filter:p.filter}}/>:<Palette size={30}/>}</span><span>{p.name}</span></button>)}</div></section>)}</div>}
           {N4_TOOLS[selected] && <LocalAiPanel key={selected} operation={N4_TOOLS[selected]} projectId={projectId} assetId={activeAssetId} sourceUrl={image} disabled={!projectReady||assetBusy||projectBusy||!autosaveReady||!!(image?.startsWith('blob:'))} onApply={applyLocalAi}/>}
-          {active==='ai'&&<div className="lv3-ai-box"><strong><Sparkles size={17}/> Gemini Chat</strong><p>Chỉnh ảnh bằng câu lệnh. Có xem trước và Apply; không dùng Local AI N4.</p><button type="button" disabled={!image} onClick={()=>setGeminiOpen(true)}><WandSparkles size={17}/> Mở Gemini Chat</button></div>}
+          {active==='ai'&&<div className="lv3-ai-box"><strong><Sparkles size={17}/> Lệnh chỉnh ảnh thông minh</strong>
+          <p> Mô tả những thay đổi bạn muốn thực hiện.
+              AI sẽ hỗ trợ chỉnh sửa ảnh theo yêu cầu.</p>
+            <button type="button" disabled={!image} onClick={()=>setGeminiOpen(true)}><WandSparkles size={17}/> Nhập câu lệnh</button></div>}
           {active==='beauty'&&<p className="lv3-soon-note">Các công cụ làm đẹp sẽ được Thắng (N2) tích hợp tại đây, các mô hình AI xử lý qua Backend.</p>}
           {active === 'design' && selected === 'text' && (
             <div className="lv3-settings v44-text-tools">
@@ -815,14 +822,10 @@ export default function EditorPage(){
         <div className="n1-versions-list">{versionsBusy&&versions.length===0?<p>Đang tải phiên bản…</p>:versions.length===0?<p>Chưa có phiên bản nào. Hãy tạo mốc lưu đầu tiên.</p>:versions.map(v=><div className="n1-versions-item" key={v.versionId}><div><strong>{v.label||`Phiên bản #${v.versionId}`}</strong><small>{new Date(v.createdAt).toLocaleString('vi-VN')}</small></div><button type="button" disabled={versionsBusy||assetBusy||projectBusy} onClick={()=>void restoreVersion(v)}>Khôi phục</button></div>)}</div>
       </section>
     </div>}
-    {geminiOpen&&image&&<GeminiChat originalPreview={image} createSource={currentImageForGemini}
-      onApply={blob=>{
-        // Gemini preview stays local until separately uploaded. Do not associate it with an old asset.
-        setImage(URL.createObjectURL(blob));setFileName('gemini-edited.png');
-        setActiveAssetId(null);
-        setEdits(initial);setPast([]);setFuture([]);
-        setStatus('Đã Apply Gemini trong trình duyệt; cần upload ảnh kết quả vào Project trước khi lưu lâu dài.');
-        setGeminiOpen(false);
-      }} onClose={()=>setGeminiOpen(false)}/>}
+    {geminiOpen&&image&&<GeminiChat projectId={projectId} originalPreview={image} createSource={currentImageForGemini}
+      onPreviewEditorTools={(steps:Step[])=>layersBridgeRef.current.previewCommands(steps)}
+      onApplyEditorTools={(steps:Step[],version:number)=>layersBridgeRef.current.applyCommands(steps,version)}
+      onFlushEditor={()=>layersBridgeRef.current.flush()}
+      onApplied={()=>{setGeminiOpen(false);setProjectRefresh(count=>count+1);}} onClose={()=>setGeminiOpen(false)}/>}
   </div>;
 }

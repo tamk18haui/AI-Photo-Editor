@@ -1,5 +1,7 @@
 package com.aiphotoeditor.gemini;
 
+import com.aiphotoeditor.common.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,7 +22,11 @@ public class GeminiEditController {
     @PostMapping(value = "/edit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public GeminiImageService.GeminiEditResponse edit(
             @RequestParam("prompt") String prompt,
-            @RequestParam("image") MultipartFile image) {
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(name = "paidOperationConfirmed", defaultValue = "false") boolean paidOperationConfirmed) {
+        if (!paidOperationConfirmed) throw new ApiException(HttpStatus.PAYMENT_REQUIRED,
+                "GEMINI_IMAGE_CONFIRMATION_REQUIRED",
+                "The legacy image endpoint requires explicit cost confirmation");
         return gemini.edit(prompt, image);
     }
 }

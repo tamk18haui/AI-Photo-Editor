@@ -12,6 +12,8 @@ export const editorStateApi = {
     (await apiClient.get<ProjectInfo>(`/projects/${id}`)).data,
   load: async (id:number): Promise<EditorDocument> =>
     (await apiClient.get<EditorDocument>(`/projects/${id}/state`)).data,
-  save: async (id:number, state:EditorDocument): Promise<StateSaved> =>
-    (await apiClient.put<StateSaved>(`/projects/${id}/state`,state)).data,
+  save: async (id:number, state:EditorDocument, expectedStateVersion?:number): Promise<StateSaved> =>
+    (await apiClient.put<StateSaved>(`/projects/${id}/state`,state,{
+      params:expectedStateVersion===undefined?undefined:{expectedStateVersion},
+    })).data,
 };

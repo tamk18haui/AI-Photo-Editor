@@ -111,8 +111,56 @@ public class AiResultLayerService {
         // Preserve all existing Fabric properties, selections, user layers, and custom metadata.
         ObjectNode next = (ObjectNode) current.deepCopy();
         ArrayNode objects = (ArrayNode) next.path("objects");
+        // Natural-edit runs start from a flattened copy of the visible canvas. Once
+        // their result is applied, exposing old image layers through transparent
+        // pixels would undo operations such as background removal. Keep the source
+        // layers for History/Undo, but make the new full-canvas result the only
+        // visible image. Other AI jobs continue to attach independent layers.
+        boolean replaceRenderedCanvas = "GEMINI".equals(job.provider)
+                && ("NATURAL_EDIT".equals(job.type) || "GENERATIVE_EDIT".equals(job.type)
+                    || "TEXT_TO_IMAGE".equals(job.type))
+                && !Boolean.FALSE.equals(request.visible())
+                && (request.opacity() == null || request.opacity() > 0);
+        if (replaceRenderedCanvas) {
+            for (JsonNode existing : objects) {
+                if (existing.isObject() && "image".equals(existing.path("type").asText())) {
+                    ((ObjectNode) existing).put("visible", false);
+                }
+            }
+        }
         ObjectNode layer = makeLayer(job, result, request);
         objects.add(layer);
+        // N5's output must also be visible in N1's active composition on reload.
+        // Place the flattened preview as a new top image layer; keep earlier layers
+        // underneath for History/Undo and never overwrite the source asset.
+        if ("GEMINI".equals(job.provider)) {
+            ObjectNode composition = next.has("n1Composition") && next.get("n1Composition").isObject()
+                    ? (ObjectNode) next.get("n1Composition") : next.putObject("n1Composition");
+            ArrayNode compositionLayers = composition.has("layers") && composition.get("layers").isArray()
+                    ? (ArrayNode) composition.get("layers") : composition.putArray("layers");
+            composition.put("version", 1);
+            if (replaceRenderedCanvas) {
+                for (JsonNode previous : compositionLayers) {
+                    if (previous.isObject()) ((ObjectNode) previous).put("visible", false);
+                }
+            }
+            ObjectNode photo = compositionLayers.addObject();
+            photo.put("id", layerId);
+            photo.put("assetId", result.id);
+            photo.put("url", result.secureUrl);
+            photo.put("name", "Gemini " + job.type);
+            photo.put("visible", true);
+            photo.put("locked", false);
+            photo.put("opacity", 100);
+            photo.put("x", 0); photo.put("y", 0); photo.put("width", 100);
+            photo.put("preset", "original");
+            photo.put("brightness", 100); photo.put("contrast", 100); photo.put("saturation", 100);
+            photo.put("lux", 100); photo.put("blur", 0); photo.put("temperature", 0);
+            composition.put("primaryAssetId", result.id);
+            ObjectNode editor = next.has("n1Editor") && next.get("n1Editor").isObject()
+                    ? (ObjectNode) next.get("n1Editor") : next.putObject("n1Editor");
+            editor.put("activeAssetId", result.id);
+        }
 
         // All changes share the same SQL transaction: any error rolls back layer + both
         // snapshots + append-only history. The original AI image and layers are untouched.

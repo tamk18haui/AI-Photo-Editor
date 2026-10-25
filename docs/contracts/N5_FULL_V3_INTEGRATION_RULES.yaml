@@ -1,0 +1,32 @@
+version: 2.0.0-n5
+scope: N5 Gemini and Natural Edit addendum to team Full Product V3 integration rules
+authentication:
+  backend: JWT bearer required for every N5 endpoint
+  sse: use fetch readable stream with Authorization Bearer; fallback to authenticated polling
+  api_keys: backend environment only; never return Gemini key to browser
+ownership:
+  projectId: verify current user permission on every API call
+  inputAssetId: must belong to project; always a newly rendered snapshot for first step
+  maskAssetId: must belong to project and use original image pixel coordinates
+  generated_assets: distinct Cloudinary object and ASSETS row; never overwrite source
+workflow:
+  sequence: [prompt, validate_plan, confirm_plan, execute_steps, preview, confirm_apply]
+  run_state: stored in the existing ai_jobs row with provider GEMINI and type NATURAL_EDIT
+  local_executor: existing N4 AiJobService and Python worker; never call Python from frontend
+  gemini_executor: GeminiJobWorker claims only GEMINI jobs in the shared ai_jobs table
+  frontend_executor: crop/rotate/adjust must upload a NEW Project asset before advancing
+  baseStateVersion: reject stale execute/apply with HTTP 409
+  apply_owner: N3 AiResultLayerService and History transaction only
+  undo_redo: replay saved State revisions, never re-run Gemini inference
+  cancellation: terminal job must not create an applied History revision
+  retries: only after explicit user request; remote GEMINI jobs are not auto replayed after restart
+  idempotency: unique per user/project/request key in ai_jobs via Flyway V11
+  mask: grayscale PNG, 8-bit, same width and height, white editable, outside preserved exactly
+batch:
+  max_items: 8
+  persistence: shared ai_jobs table (BATCH parent and GEMINI children)
+  children: individually authorized Project/Asset IDs
+  apply: never automatic
+testing:
+  required: [backend_unit, backend_integration_mysql, frontend_build, AT-07, AT-09, AT-11, AT-12]
+  missing_real_provider: may be tested with mocks but cannot be marked provider E2E PASS

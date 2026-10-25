@@ -5,6 +5,9 @@ import { assetApi } from '../services/assetApi';
 import { editorStateApi } from '../services/editorStateApi';
 import './layers-workspace.css';
 import { FILTER_MAP } from './editor-presets';
+import { applyEditableCommands } from '../features/gemini/editorToolAdapter';
+import type { Step } from '../features/gemini/geminiJobsApi';
+import { geminiJobsApi } from '../features/gemini/geminiJobsApi';
 
 export type ImageLayer = {
   id: string; assetId: number; url: string; name: string;
@@ -12,6 +15,16 @@ export type ImageLayer = {
   x: number; y: number; width: number; rotation?:number; flipped?:boolean; preset?:string; brightness?:number; contrast?:number; saturation?:number; lux?:number; blur?:number; temperature?:number; highlights?:number;
 };
 export type Composition = { version: 1; layers: ImageLayer[] };
+export type N5LayerBridge = {
+  flush:()=>Promise<void>;
+  prepare:()=>Promise<void>;
+  resume:()=>void;
+  renderPng:()=>Promise<Blob>;
+  pickImage:()=>void;
+  pickBackground:()=>void;
+  applyCommands:(steps:Step[],expectedStateVersion:number)=>Promise<void>;
+  previewCommands:(steps:Step[])=>Promise<Blob>;
+};
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 export function readComposition(doc: Record<string, unknown>): ImageLayer[] {
   const data = doc.n1Composition;
@@ -23,7 +36,7 @@ export function readComposition(doc: Record<string, unknown>): ImageLayer[] {
       rotation:Number(v.rotation??0),flipped:v.flipped===true,preset:String(v.preset??'original'),brightness:Number(v.brightness??100),contrast:Number(v.contrast??100),saturation:Number(v.saturation??100),lux:Number(v.lux??100),blur:Number(v.blur??0),temperature:Number(v.temperature??0),highlights:Number(v.highlights??100)}));
 }
 
-type CreativeLayer={id:string;kind:'text'|'sticker'|'shape';value:string;name:string;x:number;y:number;width:number;fontSize:number;color:string;rotation:number;visible:boolean;locked:boolean;opacity:number;fontFamily?:string};
+export type CreativeLayer={id:string;kind:'text'|'sticker'|'shape';value:string;name:string;x:number;y:number;width:number;fontSize:number;color:string;rotation:number;visible:boolean;locked:boolean;opacity:number;fontFamily?:string};
 export const TEXT_FONT_STYLES = [{"name": "Tiêu chuẩn", "font": "Arial", "sample": "Aa"}, {"name": "Thanh lịch", "font": "Georgia", "sample": "Aa"}, {"name": "Bìa tạp chí", "font": "Times New Roman", "sample": "EDITORIAL"}, {"name": "Tiêu đề đậm", "font": "Impact", "sample": "POSTER"}, {"name": "Máy chữ", "font": "Courier New", "sample": "TYPE"}, {"name": "Tươi sáng", "font": "Trebuchet MS", "sample": "Creative"}, {"name": "Dễ đọc", "font": "Verdana", "sample": "Design"}, {"name": "Gọn gàng", "font": "Tahoma", "sample": "Minimal"}, {"name": "Cổ điển", "font": "Garamond", "sample": "Luxury"}, {"name": "Sang trọng", "font": "Palatino Linotype", "sample": "Classic"}, {"name": "Vui nhộn", "font": "Comic Sans MS", "sample": "Fun!"}, {"name": "Hiện đại", "font": "Segoe UI", "sample": "MODERN"}, {"name": "Trình bày", "font": "Cambria", "sample": "Serif"}, {"name": "Trẻ trung", "font": "Calibri", "sample": "Fresh"}, {"name": "Code", "font": "Consolas", "sample": "CODE"}, {"name": "Viết tay", "font": "Brush Script MT", "sample": "Script"}, {"name": "Tiêu đề nét đậm", "font": "Arial Black", "sample": "BOLD"}, {"name": "Mềm mại", "font": "Candara", "sample": "Softer"}, {"name": "Thư tín", "font": "Book Antiqua", "sample": "Letters"}, {"name": "Trang báo", "font": "Baskerville", "sample": "The News"}, {"name": "Tạp chí mới", "font": "Century Gothic", "sample": "Vogue"}, {"name": "Bền vững", "font": "Constantia", "sample": "Classic"}, {"name": "Đậm cổ điển", "font": "Franklin Gothic Medium", "sample": "STRONG"}, {"name": "Kỹ thuật", "font": "Lucida Console", "sample": "MONO"}] as const;
 
 const presets:Record<string,string> = FILTER_MAP;
@@ -61,7 +74,7 @@ function wrapCreativeLines(ctx:CanvasRenderingContext2D,text:string,maxWidth:num
   return lines;
 }
 
-export default function LayersWorkspace(props:{projectId:number; ready:boolean; originalAssetId:number|null; originalUrl:string|null; originalName:string; canvasWidth:number; canvasHeight:number; sourceDocument:Record<string,unknown>|null; active:boolean;panelOpen:boolean;onRequestOriginalImage:()=>void;onStatus:(message:string)=>void;projectName:string;ratio:string;zoom:number;exportCommand:number;historyCommand:{seq:number;action:'undo'|'redo'}|null;frameCommand:{seq:number;frame:string}|null;backgroundCommand:{seq:number;type:'transparent'|'color'|'image';color?:string}|null;groupFilterCommand:{seq:number;filter:string}|null;onHistoryAvailability:(undo:boolean,redo:boolean)=>void;onZoomChange:(zoom:number)=>void;layerBridgeRef:{current:{flush:()=>Promise<void>;prepare:()=>Promise<void>;resume:()=>void;pickImage:()=>void;pickBackground:()=>void}};editCommand:{seq:number;patch:object}|null;creativeCommand:{seq:number;kind:'text'|'sticker'|'shape';value:string;fontFamily?:string}|null;creativeEditCommand:{seq:number;id:string;patch:Partial<CreativeLayer>}|null;imageLayerEditCommand:{seq:number;id:string;patch:Partial<ImageLayer>}|null;onSelectImageLayer:(value:{id:string;name:string;width:number;opacity:number;locked:boolean;isBase:boolean}|null)=>void;onSelectCreativeLayer:(value:{id:string;kind:'text'|'sticker'|'shape';value:string;fontFamily:string;color:string;fontSize:number;width:number;rotation:number;opacity:number;locked:boolean}|null)=>void;onSelectBackground:(value:{type:'transparent'|'color'|'image';color:string;url?:string})=>void;onSelectGroupFilter:(filter:string)=>void;onSelectImageEdits:(value:Record<string,number|string|boolean>,asset:{assetId:number;url:string;name:string})=>void}){
+export default function LayersWorkspace(props:{projectId:number; ready:boolean; originalAssetId:number|null; originalUrl:string|null; originalName:string; canvasWidth:number; canvasHeight:number; sourceDocument:Record<string,unknown>|null; active:boolean;panelOpen:boolean;onRequestOriginalImage:()=>void;onStatus:(message:string)=>void;projectName:string;ratio:string;zoom:number;exportCommand:number;historyCommand:{seq:number;action:'undo'|'redo'}|null;frameCommand:{seq:number;frame:string}|null;backgroundCommand:{seq:number;type:'transparent'|'color'|'image';color?:string}|null;groupFilterCommand:{seq:number;filter:string}|null;onHistoryAvailability:(undo:boolean,redo:boolean)=>void;onZoomChange:(zoom:number)=>void;layerBridgeRef:{current:N5LayerBridge};editCommand:{seq:number;patch:object}|null;creativeCommand:{seq:number;kind:'text'|'sticker'|'shape';value:string;fontFamily?:string}|null;creativeEditCommand:{seq:number;id:string;patch:Partial<CreativeLayer>}|null;imageLayerEditCommand:{seq:number;id:string;patch:Partial<ImageLayer>}|null;onSelectImageLayer:(value:{id:string;name:string;width:number;opacity:number;locked:boolean;isBase:boolean}|null)=>void;onSelectCreativeLayer:(value:{id:string;kind:'text'|'sticker'|'shape';value:string;fontFamily:string;color:string;fontSize:number;width:number;rotation:number;opacity:number;locked:boolean}|null)=>void;onSelectBackground:(value:{type:'transparent'|'color'|'image';color:string;url?:string})=>void;onSelectGroupFilter:(filter:string)=>void;onSelectImageEdits:(value:Record<string,number|string|boolean>,asset:{assetId:number;url:string;name:string})=>void}){
   const {projectId,ready,originalAssetId,originalUrl,originalName,canvasWidth,canvasHeight,sourceDocument,active,panelOpen,onRequestOriginalImage,onStatus,projectName,ratio,zoom,exportCommand,historyCommand,frameCommand,backgroundCommand,groupFilterCommand,onHistoryAvailability,onZoomChange,layerBridgeRef,editCommand,creativeCommand,creativeEditCommand,imageLayerEditCommand,onSelectImageLayer,onSelectCreativeLayer,onSelectBackground,onSelectGroupFilter,onSelectImageEdits}=props;
   const [layers,setLayers]=useState<ImageLayer[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
@@ -307,7 +320,33 @@ export default function LayersWorkspace(props:{projectId:number; ready:boolean; 
     await editorStateApi.save(projectId,{...latest,n1Composition:{...(isObj(latest.n1Composition)?latest.n1Composition:{}),version:1,layers:snapshot,background:bg,creative:cre,frame,groupFilter}});
     prevFingerprint.current=JSON.stringify(snapshot);prevBg.current=JSON.stringify(bg);prevCreative.current=JSON.stringify(cre);prevFrame.current=frame;prevGroupFilter.current=groupFilter;
   };
-  layerBridgeRef.current={flush:flushLayers,prepare:async()=>{suspended.current=true;await flushLayers();},resume:()=>{suspended.current=false;},pickImage:()=>fileRef.current?.click(),pickBackground:()=>backgroundRef.current?.click()};
+  /** N5 Tool Adapter: one atomic N1 composition write, retaining editable layers and Undo. */
+  const applyN5Commands=async(steps:Step[],expectedStateVersion:number)=>{
+    if(!ready||!hydrated)throw new Error('Editor chưa tải xong. Hãy chờ ảnh hiện ra.');
+    // Fully validate/prepare all operations before mutating either React state or MySQL.
+    const next=applyEditableCommands({layers,creative,background,frame,groupFilter},steps,selected);
+    await flushLayers();
+    const version=await geminiJobsApi.context(projectId);
+    if(version.stateVersion!==expectedStateVersion)
+      throw new Error('Project đã thay đổi kể từ lúc tạo bản xem trước. Hãy nhập lại lệnh để tránh ghi đè.');
+    const latest=await editorStateApi.load(projectId);
+    const composition=isObj(latest.n1Composition)?latest.n1Composition:{};
+    await editorStateApi.save(projectId,{...latest,n1Composition:{...composition,version:1,
+      layers:next.layers,creative:next.creative,background:next.background,
+      frame:next.frame,groupFilter:next.groupFilter}},expectedStateVersion);
+    // The persisted write succeeded; now publish one undoable N1 editor operation.
+    recordHistory('n5-'+Date.now());
+    setLayers(next.layers);setCreative(next.creative);setBackground(next.background);
+    setFrame(next.frame);setGroupFilter(next.groupFilter);
+    prevFingerprint.current=JSON.stringify(next.layers);
+    prevBg.current=JSON.stringify(next.background);
+    prevCreative.current=JSON.stringify(next.creative);
+    prevFrame.current=next.frame;
+    prevGroupFilter.current=next.groupFilter;
+    onStatus(`Đã thực hiện ${steps.length} thao tác bằng công cụ Editor, giữ nguyên các layer và Undo/Redo.`);
+  };
+  layerBridgeRef.current={flush:flushLayers,prepare:async()=>{suspended.current=true;await flushLayers();},resume:()=>{suspended.current=false;},renderPng:()=>exportPng(false),pickImage:()=>fileRef.current?.click(),pickBackground:()=>backgroundRef.current?.click(),applyCommands:applyN5Commands,
+    previewCommands:(steps)=>exportPng(false,applyEditableCommands({layers,creative,background,frame,groupFilter},steps,selected))};
   // When the first image is uploaded after an initially empty Project, seed the canvas.
   useEffect(()=>{
     if(!hydrated||!ready||!originalAssetId||!originalUrl)return;
@@ -374,13 +413,16 @@ export default function LayersWorkspace(props:{projectId:number; ready:boolean; 
     onZoomChange(Math.min(1600,Math.max(50,Math.round(nativePixels.width/shownWidth*100))));
     onStatus(`Xem pixel thật 1:1: ${nativePixels.width}×${nativePixels.height}. Giữ Space để kéo ảnh.`);
   };
-  const exportPng=async()=>{
-    if(!layers.length&&!creative.length)return;setBusy(true);
+  const exportPng=async(download=true,preview?:{layers:ImageLayer[];creative:CreativeLayer[];background:typeof background;frame:string;groupFilter:string}):Promise<Blob>=>{
+    const renderLayers=preview?.layers??layers,renderCreative=preview?.creative??creative;
+    const renderBackground=preview?.background??background,renderFrame=preview?.frame??frame;
+    const renderGroupFilter=preview?.groupFilter??groupFilter;
+    if(!renderLayers.length&&!renderCreative.length)throw new Error('Không có lớp ảnh để kết xuất');setBusy(true);
     try{
       let w=Math.max(1,canvasWidth||1024),h=Math.max(1,Math.round(w/aspect));
       // The photo sets output pixels even when text, frames, or other layers exist.
       // Crop the original pixels to the chosen aspect: no blank margins or upscaling.
-      if(nativeResolution&&layers.length){
+      if(nativeResolution&&renderLayers.length){
         const photo=primaryPhoto&&hasBasePhoto(primaryPhoto)?primaryPhoto:null;
         if(photo){
           const actual=await loadImage(photo.url);
@@ -394,13 +436,13 @@ export default function LayersWorkspace(props:{projectId:number; ready:boolean; 
       if(w*h>80000000)throw new Error('Export size exceeds 80 megapixels');
       const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
       const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas unavailable');
-      if(background.type==='color'){ctx.fillStyle=background.color;ctx.fillRect(0,0,w,h);}
-      if(background.type==='image'&&background.url){
-        const bg=await loadImage(background.url);const scale=Math.max(w/bg.naturalWidth,h/bg.naturalHeight);
+      if(renderBackground.type==='color'){ctx.fillStyle=renderBackground.color;ctx.fillRect(0,0,w,h);}
+      if(renderBackground.type==='image'&&renderBackground.url){
+        const bg=await loadImage(renderBackground.url);const scale=Math.max(w/bg.naturalWidth,h/bg.naturalHeight);
         const bw=bg.naturalWidth*scale,bh=bg.naturalHeight*scale;
         ctx.drawImage(bg,(w-bw)/2,(h-bh)/2,bw,bh);
       }
-      for(const l of layers){if(!l.visible)continue;
+      for(const l of renderLayers){if(!l.visible)continue;
         const img=await loadImage(l.url);ctx.globalAlpha=l.opacity/100;
         const dw=w*l.width/100,dh=dw*img.naturalHeight/img.naturalWidth;
         ctx.save();ctx.translate(w*l.x/100+dw/2,h*l.y/100+dh/2);ctx.rotate((l.rotation??0)*Math.PI/180);ctx.scale(l.flipped?-1:1,1);ctx.filter=imageFilter(l);
@@ -413,37 +455,37 @@ export default function LayersWorkspace(props:{projectId:number; ready:boolean; 
         ctx.restore();
       }
       ctx.globalAlpha=1;
-      for(const l of creative){if(!l.visible)continue;ctx.save();ctx.globalAlpha=l.opacity/100;
+      for(const l of renderCreative){if(!l.visible)continue;ctx.save();ctx.globalAlpha=l.opacity/100;
         ctx.translate(w*l.x/100,h*l.y/100);ctx.rotate(l.rotation*Math.PI/180);ctx.fillStyle=l.color;
         if(l.kind==='text'||l.kind==='sticker'){const font=Math.round(l.fontSize*w/1024);ctx.font=`${l.kind==='text'?'bold ':''}${font}px "${(l.fontFamily||'Arial').replaceAll('\"','')}", sans-serif`;ctx.textBaseline='top';const wrapped=wrapCreativeLines(ctx,l.value,Math.max(10,w*l.width/100));for(const [i,line] of wrapped.entries())ctx.fillText(line,0,i*font*1.48);}
         else {const size=w*l.width/100;ctx.strokeStyle=l.color;ctx.lineWidth=Math.max(2,w/512);ctx.beginPath();if(l.value==='circle'||l.value==='ellipse'){ctx.ellipse(size/2,size/2,size/2,l.value==='ellipse'?size/3:size/2,0,0,Math.PI*2);}else{ctx.rect(0,0,size,size);}ctx.stroke();}
         ctx.restore();}
       // Template frame is drawn AFTER the image stack so export matches the preview.
-      if(frame!=='none'){
+      if(renderFrame!=='none'){
         ctx.save();ctx.globalAlpha=1;ctx.filter='none';ctx.strokeStyle='#ffffff';ctx.lineWidth=Math.max(10,w*.025);
-        if(frame==='simple'){ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,w-ctx.lineWidth,h-ctx.lineWidth);}
-        if(frame==='polaroid'){ctx.fillStyle='#fff';const border=Math.round(w*.055);ctx.fillRect(0,0,w,border);ctx.fillRect(0,0,border,h);ctx.fillRect(w-border,0,border,h);ctx.fillRect(0,h-Math.round(w*.16),w,Math.round(w*.16));}
-        if(frame==='film'){ctx.fillStyle='#151515';const b=Math.round(w*.07);ctx.fillRect(0,0,w,b);ctx.fillRect(0,h-b,w,b);ctx.fillStyle='#f4f4f4';for(let x=b/2;x<w;x+=b*2){ctx.fillRect(x,Math.round(b*.24),b*.65,b*.52);ctx.fillRect(x,h-Math.round(b*.76),b*.65,b*.52);}}
-        if(['minimal','gold','noir','editorial','rounded','double','vintage','neon','pastel','postcard'].includes(frame)){
+        if(renderFrame==='simple'){ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,w-ctx.lineWidth,h-ctx.lineWidth);}
+        if(renderFrame==='polaroid'){ctx.fillStyle='#fff';const border=Math.round(w*.055);ctx.fillRect(0,0,w,border);ctx.fillRect(0,0,border,h);ctx.fillRect(w-border,0,border,h);ctx.fillRect(0,h-Math.round(w*.16),w,Math.round(w*.16));}
+        if(renderFrame==='film'){ctx.fillStyle='#151515';const b=Math.round(w*.07);ctx.fillRect(0,0,w,b);ctx.fillRect(0,h-b,w,b);ctx.fillStyle='#f4f4f4';for(let x=b/2;x<w;x+=b*2){ctx.fillRect(x,Math.round(b*.24),b*.65,b*.52);ctx.fillRect(x,h-Math.round(b*.76),b*.65,b*.52);}}
+        if(['minimal','gold','noir','editorial','rounded','double','vintage','neon','pastel','postcard'].includes(renderFrame)){
           const pad=Math.max(5,w*.032);
           const line=(color:string,width:number,space:number)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.strokeRect(space,space,w-2*space,h-2*space);};
-          if(frame==='minimal')line('#ffffff',Math.max(3,w*.008),pad);
-          if(frame==='gold'){line('#e4b75c',Math.max(6,w*.015),pad);line('#fff4c8',Math.max(2,w*.004),pad+w*.025);}
-          if(frame==='noir'){line('#15151d',Math.max(16,w*.06),pad);line('#f9f9ff',Math.max(2,w*.003),pad+w*.025);}
-          if(frame==='editorial'){line('#ffffff',Math.max(10,w*.045),pad);ctx.fillStyle='#fff';ctx.fillRect(0,h*.86,w,h*.14);ctx.fillStyle='#222';ctx.font=`bold ${Math.max(14,Math.round(w*.037))}px Georgia`;ctx.fillText('THE PHOTO EDIT',w*.07,h*.93);}
-          if(frame==='rounded'){ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(12,w*.033);ctx.beginPath();ctx.roundRect(pad,pad,w-pad*2,h-pad*2,Math.max(16,w*.07));ctx.stroke();}
-          if(frame==='double'){line('#fff',Math.max(4,w*.014),pad);line('#fff',Math.max(2,w*.006),pad+w*.05);}
-          if(frame==='vintage'){line('#b58b65',Math.max(13,w*.05),pad);line('#f1ddbf',Math.max(3,w*.009),pad+w*.036);}
-          if(frame==='neon'){ctx.shadowColor='#e95cfd';ctx.shadowBlur=w*.04;line('#dd89f9',Math.max(5,w*.012),pad);ctx.shadowBlur=0;}
-          if(frame==='pastel'){line('#e8c8ed',Math.max(14,w*.05),pad);line('#ffffff',Math.max(3,w*.008),pad+w*.035);}
-          if(frame==='postcard'){ctx.fillStyle='#fff7ec';ctx.fillRect(0,h*.82,w,h*.18);ctx.fillStyle='#a26550';ctx.font=`${Math.max(12,Math.round(w*.035))}px Georgia`;ctx.fillText('WISH YOU WERE HERE',w*.06,h*.92);line('#fff7ec',Math.max(4,w*.012),pad);}
+          if(renderFrame==='minimal')line('#ffffff',Math.max(3,w*.008),pad);
+          if(renderFrame==='gold'){line('#e4b75c',Math.max(6,w*.015),pad);line('#fff4c8',Math.max(2,w*.004),pad+w*.025);}
+          if(renderFrame==='noir'){line('#15151d',Math.max(16,w*.06),pad);line('#f9f9ff',Math.max(2,w*.003),pad+w*.025);}
+          if(renderFrame==='editorial'){line('#ffffff',Math.max(10,w*.045),pad);ctx.fillStyle='#fff';ctx.fillRect(0,h*.86,w,h*.14);ctx.fillStyle='#222';ctx.font=`bold ${Math.max(14,Math.round(w*.037))}px Georgia`;ctx.fillText('THE PHOTO EDIT',w*.07,h*.93);}
+          if(renderFrame==='rounded'){ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(12,w*.033);ctx.beginPath();ctx.roundRect(pad,pad,w-pad*2,h-pad*2,Math.max(16,w*.07));ctx.stroke();}
+          if(renderFrame==='double'){line('#fff',Math.max(4,w*.014),pad);line('#fff',Math.max(2,w*.006),pad+w*.05);}
+          if(renderFrame==='vintage'){line('#b58b65',Math.max(13,w*.05),pad);line('#f1ddbf',Math.max(3,w*.009),pad+w*.036);}
+          if(renderFrame==='neon'){ctx.shadowColor='#e95cfd';ctx.shadowBlur=w*.04;line('#dd89f9',Math.max(5,w*.012),pad);ctx.shadowBlur=0;}
+          if(renderFrame==='pastel'){line('#e8c8ed',Math.max(14,w*.05),pad);line('#ffffff',Math.max(3,w*.008),pad+w*.035);}
+          if(renderFrame==='postcard'){ctx.fillStyle='#fff7ec';ctx.fillRect(0,h*.82,w,h*.18);ctx.fillStyle='#a26550';ctx.font=`${Math.max(12,Math.round(w*.035))}px Georgia`;ctx.fillText('WISH YOU WERE HERE',w*.06,h*.92);line('#fff7ec',Math.max(4,w*.012),pad);}
         }
 
         ctx.restore();
       }
       // One global filter AFTER compositing: background, photos, text, stickers and frame.
       // Keep editable layer data; do not rasterize it into Project/Cloudinary.
-      const groupCss=FILTER_MAP[groupFilter]??'none';
+      const groupCss=FILTER_MAP[renderGroupFilter]??'none';
       if(groupCss!=='none'){
         const merged=document.createElement('canvas');merged.width=w;merged.height=h;
         const mergedCtx=merged.getContext('2d');if(!mergedCtx)throw new Error('Group filter canvas unavailable');
@@ -452,12 +494,15 @@ export default function LayersWorkspace(props:{projectId:number; ready:boolean; 
       }
       const blob=await new Promise<Blob|null>(r=>canvas.toBlob(r,'image/png'));
       if(!blob)throw new Error('PNG export failed');
-      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${projectName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'project'}.png`;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1500);
-      onStatus(`Đã xuất ${w}×${h} PNG theo tên Project, gồm ảnh, chữ, sticker và nền.`);
-    }catch(err){console.error(err);onStatus('Xuất ảnh ghép thất bại. Kiểm tra CORS của ảnh Cloudinary.');}
+      if(download){
+        const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${projectName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'project'}.png`;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1500);
+        onStatus(`Đã xuất ${w}×${h} PNG theo tên Project, gồm ảnh, chữ, sticker và nền.`);
+      }
+      return blob;
+    }catch(err){console.error(err);onStatus('Kết xuất ảnh ghép thất bại. Kiểm tra CORS của ảnh Cloudinary.');throw err;}
     finally{setBusy(false);}
   };
-  useEffect(()=>{if(!exportCommand||exportCommand===lastExportSeq.current||!hydrated)return;lastExportSeq.current=exportCommand;void exportPng();
+  useEffect(()=>{if(!exportCommand||exportCommand===lastExportSeq.current||!hydrated)return;lastExportSeq.current=exportCommand;void exportPng().catch(()=>{});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[exportCommand]);
   return <>

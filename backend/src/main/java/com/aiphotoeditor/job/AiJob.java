@@ -19,6 +19,9 @@ public class AiJob {
     @Column(name = "created_by_user_id")
     public Long createdByUserId;
 
+    @Column(name = "idempotency_key", length = 120)
+    public String idempotencyKey;
+
     @Column(nullable = false, length = 64)
     public String type;
 
