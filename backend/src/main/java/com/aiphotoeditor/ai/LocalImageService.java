@@ -76,8 +76,15 @@ public class LocalImageService {
 
     /** Function: Upscale request with exact contract fields. */
     public AiJobDtos.AiJobResponse upscale(long projectId, long assetId, int scale, Integer tileSize) {
+        return upscale(projectId, assetId, scale, tileSize, null);
+    }
+
+    /** Fast x4 uses SRVGGNetCompact, quality uses the existing RRDBNet checkpoint. */
+    public AiJobDtos.AiJobResponse upscale(long projectId, long assetId, int scale,
+                                          Integer tileSize, String model) {
         ObjectNode params = mapper.createObjectNode().put("scale", scale);
         if (tileSize != null) params.put("tileSize", tileSize);
+        if (model != null) params.put("model", model);
         return submit(projectId, assetId, AiJobType.UPSCALE, params);
     }
 
@@ -115,9 +122,14 @@ public class LocalImageService {
     private void check(AiJobType operation, JsonNode params) {
         switch (operation) {
             case UPSCALE -> {
-                if (!Set.of(2, 4).contains(params.path("scale").asInt(-1))) throw invalid("scale must be 2 or 4");
+                int scale = params.path("scale").asInt(-1);
+                if (!Set.of(2, 4).contains(scale)) throw invalid("scale must be 2 or 4");
                 int tile = params.path("tileSize").asInt(0);
                 if (tile < 0 || tile > 2048) throw invalid("tileSize out of range");
+                String model = params.path("model").asText("quality");
+                if (!Set.of("quality", "fast").contains(model) || (scale != 4 && model.equals("fast"))) {
+                    throw invalid("model must be quality or fast (x4 only)");
+                }
             }
             case REMOVE_BACKGROUND -> {
                 String mode = params.path("outputMode").asText("TRANSPARENT");

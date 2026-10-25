@@ -11,18 +11,19 @@ import {
   CircleHelp, Cloud, Crop, Download, Eraser, Expand,
   FlipHorizontal, FolderOpen, Grid2X2, Heart, Image as ImageIcon,
   ImagePlus, Layers3, LayoutTemplate, Move, Paintbrush, Palette,
-  Redo2, RotateCcw, RotateCw, Save, SlidersHorizontal, History, BookmarkPlus,
-  Sparkles, Sticker, Sun, Type, Undo2, WandSparkles, ZoomIn, ZoomOut,
+  Redo2, RotateCw, Save, SlidersHorizontal, History, BookmarkPlus,
+  Sparkles, Sticker, Type, Undo2, WandSparkles, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import GeminiChat from '../features/gemini/GeminiChat';
 import LocalAiPanel from '../features/localai/LocalAiPanel';
-import LayersWorkspace, { readComposition } from '../layouts/LayersWorkspace';
+import LayersWorkspace, { readComposition, TEXT_FONT_STYLES } from '../layouts/LayersWorkspace';
 import { localAiApi } from '../services/localAiApi';
+import { FILTER_PRESETS, FRAME_PRESETS } from '../layouts/editor-presets';
 import type { LocalAiJob, LocalAiOperation } from '../services/localAiApi';
 import './editor-modern.css';
+import './editor-v4.css';
 import './editor-versions-n1.css';
 
-import TextTool from '../features/editor/creative/text/TextTool';
 import ShapeTool, { type ShapeType } from '../features/editor/creative/shapes/ShapeTool';
 import StickerTool, { type StickerItem } from '../features/editor/creative/stickers/StickerTool';
 type Category = 'template' | 'edit' | 'beauty' | 'design' | 'remove' | 'filters' | 'adjust' | 'effects' | 'background' | 'ai';
@@ -31,12 +32,12 @@ type CategoryItem = { id: Category; label: string; icon: typeof Sparkles; childr
 
 const categories: CategoryItem[] = [
   { id: 'template', label: 'Template', icon: LayoutTemplate, children: [
-    {id:'social',label:'Mạng xã hội',status:'soon'},{id:'poster',label:'Poster',status:'soon'},{id:'banner',label:'Banner',status:'soon'},{id:'collage-template',label:'Bố cục mẫu',status:'soon'} ] },
+    {id:'frame-none',label:'Không khung',icon:LayoutTemplate},{id:'frame-simple',label:'Khung viền',icon:LayoutTemplate},{id:'frame-polaroid',label:'Polaroid',icon:LayoutTemplate},{id:'frame-film',label:'Cuộn phim',icon:LayoutTemplate} ] },
   { id: 'edit', label: 'Chỉnh sửa', icon: Crop, children: [
     {id:'crop',label:'Cắt tỷ lệ',icon:Crop},{id:'rotate',label:'Xoay ảnh',icon:RotateCw},{id:'flip',label:'Lật ngang',icon:FlipHorizontal},
-    {id:'light',label:'Ánh sáng',icon:Sun},{id:'n4-upscale2',label:'Nâng cấp AI 2×',icon:Sparkles},{id:'n4-upscale4',label:'Nâng cấp AI 4×',icon:Sparkles},{id:'n4-denoise',label:'Khử nhiễu AI',icon:WandSparkles},{id:'expand',label:'Mở rộng AI',icon:Expand,status:'soon'} ] },
-  { id: 'beauty', label: 'Làm đẹp', icon: Heart, children: [
-    {id:'n4-faceRestore',label:'Phục hồi khuôn mặt AI',icon:WandSparkles},{id:'beauty-auto',label:'Tự động',status:'soon'},{id:'face',label:'Chỉnh mặt',status:'soon'},{id:'slim',label:'Kéo thon',status:'soon'},
+    {id:'expand',label:'Mở rộng AI',icon:Expand,status:'soon'} ] },
+  { id: 'beauty', label: 'Nâng cao AI', icon: Heart, children: [
+    {id:'n4-upscale2',label:'AI Upscale 2×',icon:Sparkles},{id:'n4-upscale4',label:'AI Upscale 4×',icon:Sparkles},{id:'n4-denoise',label:'AI khử nhiễu',icon:WandSparkles},{id:'n4-faceRestore',label:'Phục hồi khuôn mặt AI',icon:WandSparkles},{id:'beauty-auto',label:'Tự động',status:'soon'},{id:'face',label:'Chỉnh mặt',status:'soon'},{id:'slim',label:'Kéo thon',status:'soon'},
     {id:'lift',label:'Nâng cơ',status:'soon'},{id:'skin',label:'Chỉnh da',status:'soon'},{id:'body',label:'Chỉnh thể',status:'soon'},
     {id:'makeup',label:'Trang điểm',status:'soon'},{id:'brush',label:'Cọ',status:'soon'},{id:'skin-tone',label:'Tông da',status:'soon'},
     {id:'hair',label:'Chỉnh tóc',status:'soon'},{id:'beauty-ai',label:'Chỉnh bằng AI',status:'soon'} ] },
@@ -62,7 +63,7 @@ const categories: CategoryItem[] = [
     {id:'blur-effect',label:'Làm mờ nghệ thuật',status:'soon'},{id:'light-leak',label:'Ánh sáng rò',status:'soon'} ] },
   { id:'background',label:'Nền',icon:ImageIcon,children:[
     {id:'bg-color',label:'Nền màu'},{id:'bg-image',label:'Nền hình ảnh'},
-    {id:'bg-ai',label:'Đổi nền AI',status:'soon'},{id:'n4-removeBg',label:'Tách nền trong suốt',icon:WandSparkles} ] },
+    {id:'bg-transparent',label:'Nền trong suốt',icon:ImageIcon} ] },
   { id:'ai',label:'Chỉnh theo AI',icon:WandSparkles,children:[
     {id:'prompt',label:'Chỉnh ảnh bằng câu lệnh',icon:WandSparkles} ] },
 ];
@@ -74,16 +75,7 @@ const N4_TOOLS: Record<string, LocalAiOperation> = {
   'n4-faceRestore':'faceRestore', 'n4-removeBg':'removeBg',
 };
 
-const presets = [
-  { id:'original',name:'Gốc',filter:'none' },
-  { id:'bw',name:'Đen trắng',filter:'grayscale(1)' },
-  { id:'vintage',name:'Vintage',filter:'sepia(.55) contrast(.92)' },
-  { id:'warm',name:'Ấm áp',filter:'sepia(.28) saturate(1.14)' },
-  { id:'cool',name:'Lạnh',filter:'hue-rotate(18deg) saturate(.92)' },
-  { id:'vivid',name:'Rực rỡ',filter:'saturate(1.65) contrast(1.1)' },
-  { id:'soft',name:'Mềm mại',filter:'contrast(.87) saturate(.85)' },
-  { id:'dramatic',name:'Điện ảnh',filter:'contrast(1.32) saturate(.9)' },
-] as const;
+const presets = FILTER_PRESETS;
 
 type Edits = { brightness:number; contrast:number; saturation:number; lux:number; highlights:number; temperature:number; blur:number; rotation:number; flipped:boolean; zoom:number; ratio:string; preset:string };
 const initial: Edits = {brightness:100,contrast:100,saturation:100,lux:100,highlights:100,temperature:0,blur:0,rotation:0,flipped:false,zoom:100,ratio:'Tự do',preset:'original'};
@@ -114,12 +106,52 @@ export default function EditorPage(){
   const [image,setImage]=useState<string|null>(null);
   const [layersOpen,setLayersOpen]=useState(true);
   const [layerCommand,setLayerCommand]=useState<{seq:number;patch:Partial<Edits>}|null>(null);
-  const [creativeCommand,setCreativeCommand]=useState<{seq:number;kind:'text'|'sticker'|'shape';value:string}|null>(null);
+  const [historyCommand,setHistoryCommand]=useState<{seq:number;action:'undo'|'redo'}|null>(null);
+  const [exportCommand,setExportCommand]=useState(0);
+  const [frameCommand,setFrameCommand]=useState<{seq:number;frame:string}|null>(null);
+  const [groupFilterCommand,setGroupFilterCommand]=useState<{seq:number;filter:string}|null>(null);
+  const [backgroundCommand,setBackgroundCommand]=useState<{seq:number;type:'color'|'image'|'transparent';color?:string}|null>(null);
+  const [backgroundSelection,setBackgroundSelection]=useState<{type:'color'|'image'|'transparent';color:string;url?:string}>({type:'transparent',color:'#ffffff'});
+  const layersBridgeRef=useRef<{flush:()=>Promise<void>;prepare:()=>Promise<void>;resume:()=>void;pickImage:()=>void;pickBackground:()=>void}>({flush:async()=>{},prepare:async()=>{},resume:()=>{},pickImage:()=>{},pickBackground:()=>{}});
+  const [layerCanUndo,setLayerCanUndo]=useState(false);
+  const [layerCanRedo,setLayerCanRedo]=useState(false);
+  const [toolboxCollapsed,setToolboxCollapsed]=useState(false);
+  const [creativeCommand,setCreativeCommand]=useState<{seq:number;kind:'text'|'sticker'|'shape';value:string;fontFamily?:string}|null>(null);
+  const [selectedCreativeLayer,setSelectedCreativeLayer]=useState<{id:string;kind:'text'|'sticker'|'shape';value:string;fontFamily:string;color:string;fontSize:number;width:number;rotation:number;opacity:number;locked:boolean}|null>(null);
+  const [creativeEditCommand,setCreativeEditCommand]=useState<{seq:number;id:string;patch:Partial<{value:string;fontFamily:string;color:string;fontSize:number;width:number;rotation:number;opacity:number}>}|null>(null);
+  const [newTextFont,setNewTextFont]=useState('Arial');
+  const [selectedImageLayer,setSelectedImageLayer]=useState<{id:string;name:string;width:number;opacity:number;locked:boolean;isBase:boolean}|null>(null);
+  const [imageLayerEditCommand,setImageLayerEditCommand]=useState<{seq:number;id:string;patch:Partial<{name:string;width:number;opacity:number}>}|null>(null);
+  const lastImageSelection=useRef<string|null>(null);
+  const editImageLayer=(patch:Partial<{name:string;width:number;opacity:number}>)=>{
+    if(!selectedImageLayer||selectedImageLayer.locked)return;
+    setImageLayerEditCommand({seq:Date.now()+Math.random(),id:selectedImageLayer.id,patch});
+  };
+  const handleImageLayerSelection=(value:typeof selectedImageLayer)=>{
+    setSelectedImageLayer(value);
+    if(value?.id&&value.id!==lastImageSelection.current){
+      lastImageSelection.current=value.id;
+      setActive('edit');setSelected('crop');setToolboxCollapsed(false);
+    }else if(!value){lastImageSelection.current=null;}
+  };
+  const lastCreativeSelection=useRef<string|null>(null);
+  const editCreative=(patch:Partial<{value:string;fontFamily:string;color:string;fontSize:number;width:number;rotation:number;opacity:number}>)=>{
+    if(!selectedCreativeLayer || selectedCreativeLayer.locked)return;
+    setCreativeEditCommand({seq:Date.now()+Math.random(),id:selectedCreativeLayer.id,patch});
+  };
+  const handleCreativeSelection=(value:typeof selectedCreativeLayer)=>{
+    setSelectedCreativeLayer(value);
+    if(value?.id && value.id!==lastCreativeSelection.current){
+      lastCreativeSelection.current=value.id;
+      setActive('design');setSelected(value.kind==='text'?'text':value.kind==='shape'?'shape':'stickers');
+      setSidebarOpen(true);setToolboxCollapsed(false);
+    } else if(!value){lastCreativeSelection.current=null;}
+  };
   const [canvasSize,setCanvasSize]=useState({width:1024,height:1024});
   const [geminiOpen, setGeminiOpen] = useState(false);
   const [fileName,setFileName]=useState('Chưa có ảnh');
   const [edits,setEdits]=useState<Edits>(initial);
-  const [textItems, setTextItems] = useState<
+  const [textItems] = useState<
     (PositionedItem & { text: string })[]
   >([]);
 
@@ -230,6 +262,11 @@ export default function EditorPage(){
       setStatus('Ảnh Gemini đang ở bản xem trước, chưa upload lên Project; không thể tự lưu ảnh này.');
       return;
     }
+    // Layer changes are also part of Save Project, not only the legacy CSS edits.
+    // This is a no-op when the layer workspace has not loaded yet.
+    try { await layersBridgeRef.current.flush(); } catch(err) {
+      console.error('Cannot flush Layers before saving Project',err);setSavePhase('error');setStatus('Lưu Layers thất bại; hãy kiểm tra Backend trước khi tiếp tục.');return;
+    }
     const snapshot={edits, past:past.slice(-40), future:future.slice(-40), activeAssetId};
     const fingerprint=JSON.stringify(snapshot);
     if(fingerprint===lastSavedRef.current) {setSavePhase('saved');return;}
@@ -271,7 +308,7 @@ export default function EditorPage(){
 
   useEffect(()=>()=>{if(image?.startsWith('blob:'))URL.revokeObjectURL(image)},[image]);
   const mutate=(patch:Partial<Edits>)=>{
-    if(layersOpen) setLayerCommand({seq:Date.now()+Math.random(),patch});
+    if(projectReady) setLayerCommand({seq:Date.now()+Math.random(),patch});
     setEdits(prev=>{
       const next={...prev,...patch};
       if(JSON.stringify(prev)===JSON.stringify(next))return prev;
@@ -279,8 +316,26 @@ export default function EditorPage(){
       return next;
     });
   };
-  const undo=()=>{if(!past.length)return;const prev=past[past.length-1];setPast(x=>x.slice(0,-1));setFuture(x=>[...x,edits]);setEdits(prev);};
-  const redo=()=>{if(!future.length)return;const next=future[future.length-1];setFuture(x=>x.slice(0,-1));setPast(x=>[...x,edits]);setEdits(next);};
+  const undo=()=>{if(layerCanUndo){setHistoryCommand({seq:Date.now()+Math.random(),action:'undo'});return;}
+    if(!past.length)return;const prev=past[past.length-1];setPast(x=>x.slice(0,-1));setFuture(x=>[...x,edits]);setEdits(prev);
+  };
+  const redo=()=>{if(layerCanRedo){setHistoryCommand({seq:Date.now()+Math.random(),action:'redo'});return;}
+    if(!future.length)return;const next=future[future.length-1];setFuture(x=>x.slice(0,-1));setPast(x=>[...x,edits]);setEdits(next);
+  };
+  const undoCallback=useRef(undo),redoCallback=useRef(redo);
+  undoCallback.current=undo;redoCallback.current=redo;
+  useEffect(()=>{
+    const handler=(event:KeyboardEvent)=>{
+      const el=event.target as HTMLElement|null;
+      if(el?.closest('input,textarea,[contenteditable="true"]'))return;
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){
+        event.preventDefault();if(event.shiftKey)redoCallback.current();else undoCallback.current();
+      } else if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='y'){
+        event.preventDefault();redoCallback.current();
+      }
+    };
+    window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);
+  },[]);
   const loadFile=async(event:ChangeEvent<HTMLInputElement>)=>{
     const file=event.target.files?.[0];event.target.value='';if(!file)return;
     if(!['image/jpeg','image/png','image/webp'].includes(file.type)){setStatus('Chỉ hỗ trợ JPG, PNG, WebP');return;}
@@ -314,7 +369,7 @@ export default function EditorPage(){
   };
   const adjustedFilter=()=>{
     const p=presets.find(p=>p.id===edits.preset)?.filter??'none';
-    return `brightness(${edits.brightness*edits.lux/10000}) contrast(${edits.contrast}%) saturate(${edits.saturation}%) ${p==='none'?'':p} blur(${edits.blur}px)`;
+    return `brightness(${edits.brightness*edits.lux/10000}) contrast(${edits.contrast}%) saturate(${edits.saturation}%) hue-rotate(${edits.temperature/3}deg) ${p==='none'?'':p} blur(${edits.blur}px)`;
   };
   const currentImageForGemini=async ():Promise<Blob>=>{
     if(!image)throw new Error('Hãy chọn ảnh trước.');
@@ -388,26 +443,78 @@ export default function EditorPage(){
     setAutosaveReady(false);
     try {
       await saveQueueRef.current.catch(()=>{});
+      await layersBridgeRef.current.prepare();
+      const resultAsset=await assetApi.get(projectId,job.resultAssetId);
+      // Upscale MUST be a native-pixel change, not a CSS filter or canvas scale.
+      // Fail closed if N4/Cloudinary returned the original resolution.
+      if ((selected==='n4-upscale2'||selected==='n4-upscale4') && image) {
+        const factor=selected==='n4-upscale2'?2:4;
+        const getPixels=(url:string)=>new Promise<{width:number;height:number}>((resolve,reject)=>{
+          const probe=new Image();probe.onload=()=>resolve({width:probe.naturalWidth,height:probe.naturalHeight});
+          probe.onerror=()=>reject(new Error('Không đọc được pixel ảnh từ Cloudinary. Kiểm tra CORS/URL.'));probe.src=url;
+        });
+        const [before,after]=await Promise.all([getPixels(image),getPixels(resultAsset.url)]);
+        if (Math.abs(after.width-before.width*factor)>2||Math.abs(after.height-before.height*factor)>2) {
+          throw new Error(`AI Upscale ${factor}× không hợp lệ: ảnh ${before.width}×${before.height}, kết quả ${after.width}×${after.height}; cần ${before.width*factor}×${before.height*factor}. Kiểm tra N4 RealESRGAN.`);
+        }
+        setStatus(`N4 đã trả ảnh ${after.width}×${after.height} pixel thực. Đang áp dụng…`);
+      }
+      // Validate native pixel dimensions BEFORE attaching the AI job or touching N3 state.
       await localAiApi.attach(projectId,job.jobId);
       const latest=await editorStateApi.load(projectId);
       const previous=latest.n1Editor && typeof latest.n1Editor==='object' && !Array.isArray(latest.n1Editor)
         ? latest.n1Editor as Record<string,unknown> : {};
-      const resultAsset=await assetApi.get(projectId,job.resultAssetId);
       const existing=readComposition(latest);
       const base=existing.length?existing:(activeAssetId && image && !image.startsWith('blob:')
         ? [{id:`original-${activeAssetId}`,assetId:activeAssetId,url:image,name:fileName,
             visible:true,locked:false,opacity:100,x:0,y:0,width:100}]:[]);
-      const newLayer={id:`ai-${job.jobId}-${job.resultAssetId}`,assetId:job.resultAssetId,
-        url:resultAsset.url,name:resultAsset.originalFileName||`AI ${job.jobId}`,
-        visible:true,locked:false,opacity:100,x:0,y:0,width:100};
+      // AI edits REPLACE the selected source photo in the composition, rather than
+      // stacking a transparent cut-out over the old opaque image.
+      // This does NOT delete the original Cloudinary asset or N3 history.
+      const processedIndex=base.findIndex(l=>l.assetId===activeAssetId);
+      const sourceIndex=processedIndex>=0?processedIndex:base.findIndex(l=>l.x===0&&l.y===0&&l.width===100);
+      const output={id:sourceIndex>=0?base[sourceIndex].id:`ai-${job.jobId}-${job.resultAssetId}`,
+        assetId:job.resultAssetId,url:resultAsset.url,
+        name:resultAsset.originalFileName||`AI ${job.jobId}`,
+        visible:true,locked:false,opacity:100,
+        x:sourceIndex>=0?base[sourceIndex].x:0,
+        y:sourceIndex>=0?base[sourceIndex].y:0,
+        width:sourceIndex>=0?base[sourceIndex].width:100,
+        rotation:sourceIndex>=0?base[sourceIndex].rotation??0:0,
+        flipped:sourceIndex>=0?base[sourceIndex].flipped??false:false,
+        preset:'original',brightness:100,contrast:100,saturation:100,lux:100,blur:0,temperature:0,highlights:100};
+      const replacingBackground=selected==='n4-removeBg';
+      const resultLayers=sourceIndex<0?[output]:base.map((layer,index)=>{
+        if(index===sourceIndex)return output;
+        // For background removal, hide old full-frame photo duplicates,
+        // above OR below the output, so transparent pixels reveal no old photo.
+        // Auxiliary objects, stickers and partial image layers are untouched.
+        if(replacingBackground && layer.x===0 && layer.y===0 && layer.width===100){
+          return {...layer,visible:false};
+        }
+        return layer;
+      });
       // Preserve N3 objects/history; only touch N1's separate composition slot.
-      await editorStateApi.save(projectId,{...latest,n1Composition:{...(typeof latest.n1Composition==='object' && latest.n1Composition?latest.n1Composition as Record<string,unknown>:{}),version:1,layers:[...base,newLayer]},
+      const oldComposition=typeof latest.n1Composition==='object' && latest.n1Composition && !Array.isArray(latest.n1Composition)
+        ?latest.n1Composition as Record<string,unknown>:{};
+      const oldBackground=oldComposition.background && typeof oldComposition.background==='object' && !Array.isArray(oldComposition.background)
+        ?oldComposition.background as Record<string,unknown>:{};
+      // Persist the authoritative primary asset. Canvas display dimensions are
+      // intentionally viewport-fit, while export must use native AI pixels.
+      const upscaleScale=selected==='n4-upscale2'?2:selected==='n4-upscale4'?4:null;
+      const nextComposition={...oldComposition,version:1,layers:resultLayers,
+        primaryAssetId:job.resultAssetId,
+        ...(upscaleScale?{lastUpscale:{scale:upscaleScale,assetId:job.resultAssetId,jobId:job.jobId}}:{}),
+        // Keep the user's chosen replacement background; only default to transparent
+        // when they have not explicitly chosen a color/image background.
+        ...(replacingBackground && (!oldBackground.type || oldBackground.type==='transparent')?{background:{...oldBackground,type:'transparent'}}:{})};
+      await editorStateApi.save(projectId,{...latest,n1Composition:nextComposition,
         n1Editor:{...previous,activeAssetId:job.resultAssetId,
         edits:initial,past:[],future:[],updatedAt:new Date().toISOString()}});
       try{await assetApi.setProjectThumbnail(projectId,job.resultAssetId)}
       catch(err){console.warn('Local AI thumbnail update failed',err)}
       window.location.reload();
-    }catch(err){setAutosaveReady(true);throw err}
+    }catch(err){layersBridgeRef.current.resume();setAutosaveReady(true);setStatus(err instanceof Error?err.message:'Không thể áp dụng kết quả N4');throw err}
   };
 
   const saveTemporary=()=>{
@@ -425,20 +532,27 @@ export default function EditorPage(){
       const context=canvas.getContext('2d');if(!context){setBusy(false);setStatus('Không tạo được ảnh xuất');return;}
       context.translate(canvas.width/2,canvas.height/2);context.rotate(edits.rotation*Math.PI/180);context.scale(edits.flipped?-1:1,1);context.filter=adjustedFilter();context.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);
       canvas.toBlob(blob=>{setBusy(false);if(!blob){setStatus('Không thể xuất ảnh');return;}
-        const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download='lumina-edited.png';anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);setStatus('Đã xuất PNG về máy');},'image/png');
+        const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=`${projectName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'project'}.png`;anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);setStatus('Đã xuất PNG về máy');},'image/png');
     };
     img.onerror=()=>{setBusy(false);setStatus('Không đọc được ảnh để xuất; kiểm tra Cloudinary CORS.');};img.src=image;
   };
   const handleTool=(id:string)=>{
     setSelected(id);
-    if(id==='add-image'){setLayersOpen(true);setStatus('Chọn nút Thêm ảnh trong bảng Layers để tải ảnh mới.');return;}
-    if(id==='bg-color'||id==='bg-image'){setLayersOpen(true);setStatus('Mở Nền ảnh trong bảng Layers bên phải để thay nền.');return;}
+    if(id==='add-image'){layersBridgeRef.current.pickImage();setStatus('Chọn ảnh để chèn lên ảnh chính. Các ảnh vẫn là layer chỉnh được.');return;}
+    if(id==='bg-color'||id==='bg-image'||id==='bg-transparent'){if(id==='bg-image')layersBridgeRef.current.pickBackground();else setBackgroundCommand({seq:Date.now()+Math.random(),type:id==='bg-color'?'color':'transparent'});return;}
+    if(id.startsWith('frame-')){setFrameCommand({seq:Date.now()+Math.random(),frame:id.slice(6)});return;}
     if(N4_TOOLS[id])return;
     if(id==='prompt'){if(image)setGeminiOpen(true);else setStatus('Hãy mở một ảnh trước khi dùng Gemini');return;}
     if(id==='rotate')mutate({rotation:(edits.rotation+90)%360});
     if(id==='flip')mutate({flipped:!edits.flipped});
     if(id==='auto')mutate({brightness:108,contrast:108,saturation:110,lux:105});
-    if(presets.some(p=>p.id===id))mutate({preset:id});
+    if(id==='crop'){setStatus('Chọn tỷ lệ để cắt ảnh theo tâm. Khung hình xuất sẽ đúng tỷ lệ đã chọn.');}
+    if(presets.some(p=>p.id===id)){
+      setGroupFilterCommand({seq:Date.now()+Math.random(),filter:id});
+      setEdits(v=>({...v,preset:id}));
+      setStatus('Đã áp dụng bộ lọc cho TOÀN BỘ bố cục: nền + ảnh + chữ + sticker. Các layer vẫn sửa riêng được.');
+      return;
+    }
     if(currentCategory.children.find(x=>x.id===id)?.status==='soon')setStatus('Công cụ này đang chờ module AI / Creative của nhóm tích hợp');
   };
   const slider=(label:string,key:keyof Edits,min:number,max:number,unit='%')=>(
@@ -458,45 +572,77 @@ export default function EditorPage(){
     <div className="lv3-main">
       <header className="lv3-topbar">
         <div className="lv3-top-left"><button className="lv3-icon-btn" title="Quay về thư viện" onClick={()=>navigate('/projects')}><ArrowLeft size={18}/></button><div className="lv3-project"><strong>{projectName}</strong><small>{fileName}</small></div><span className="lv3-draft-tag">Bản nháp</span></div>
-        <div className="lv3-top-actions"><button type="button" onClick={()=>void openVersions()} disabled={!projectReady||projectBusy||assetBusy} title="Mốc phiên bản Project"><History size={18}/><span>Phiên bản</span></button><button onClick={undo} disabled={!past.length} title="Hoàn tác"><Undo2 size={18}/><span>Hoàn tác</span></button><button onClick={redo} disabled={!future.length} title="Làm lại"><Redo2 size={18}/><span>Làm lại</span></button><span className="lv3-split"/><button onClick={saveTemporary} title="Lưu tạm thiết lập phiên làm việc"><Save size={18}/><span>Lưu tạm</span></button><button onClick={()=>void saveToProject()} disabled={!projectReady||projectBusy||assetBusy} title="Lưu thông số Editor vào MySQL"><Cloud size={18}/><span>{projectBusy?'Đang lưu...':'Lưu Project'}</span></button><span title="Tự lưu sau 1,8 giây không thao tác" aria-live="polite" style={{fontSize:12,whiteSpace:'nowrap',color:savePhase==='error'?'#ba314e':'#796c95'}}>{savePhase==='pending'?'Chờ tự lưu…':savePhase==='saving'?'Đang lưu…':savePhase==='saved'?'Đã lưu ✓':savePhase==='error'?'Lưu lỗi!':'Tự lưu bật'}</span><button className="lv3-purple-button" onClick={exportImage} disabled={!image||isBusy}><Download size={18}/>Xuất ảnh</button></div>
+        <div className="lv3-top-actions"><button type="button" onClick={()=>void openVersions()} disabled={!projectReady||projectBusy||assetBusy} title="Mốc phiên bản Project"><History size={18}/><span>Phiên bản</span></button><button onClick={undo} disabled={!past.length&&!layerCanUndo} title="Hoàn tác"><Undo2 size={18}/><span>Hoàn tác</span></button><button onClick={redo} disabled={!future.length&&!layerCanRedo} title="Làm lại"><Redo2 size={18}/><span>Làm lại</span></button><span className="lv3-split"/><button onClick={saveTemporary} title="Lưu tạm thiết lập phiên làm việc"><Save size={18}/><span>Lưu tạm</span></button><button onClick={()=>void saveToProject()} disabled={!projectReady||projectBusy||assetBusy} title="Lưu thông số Editor vào MySQL"><Cloud size={18}/><span>{projectBusy?'Đang lưu...':'Lưu Project'}</span></button><span title="Tự lưu sau 1,8 giây không thao tác" aria-live="polite" style={{fontSize:12,whiteSpace:'nowrap',color:savePhase==='error'?'#ba314e':'#796c95'}}>{savePhase==='pending'?'Chờ tự lưu…':savePhase==='saving'?'Đang lưu…':savePhase==='saved'?'Đã lưu ✓':savePhase==='error'?'Lưu lỗi!':'Tự lưu bật'}</span><button className="lv3-purple-button" onClick={()=>{if(projectReady)setExportCommand(v=>v+1);else exportImage();}} disabled={!image||isBusy}><Download size={18}/>Xuất ảnh</button></div>
       </header>
       <div className="lv3-body">
-        <section className="lv3-toolbox" aria-label={`Công cụ ${currentCategory.label}`}>
-          <div className="lv3-toolbox-title"><div><small>CÔNG CỤ</small><h2>{currentCategory.label}</h2></div><button className="lv3-icon-btn" title="Đóng bảng công cụ" onClick={()=>setSidebarOpen(false)}><ChevronLeft size={18}/></button></div>
-          <div className="lv3-tool-grid">{currentCategory.children.map(t=>{const Icon=t.icon||WandSparkles;return <button key={t.id} className={`lv3-tool-item ${selected===t.id?'selected':''}`} onClick={()=>handleTool(t.id)} title={t.label}><span className="lv3-tool-symbol"><Icon size={21}/></span><span>{t.label}</span>{t.status==='soon'&&<small>SAU</small>}</button>})}</div>
-          {(active==='edit'||active==='adjust')&&<div className="lv3-settings"><div className="lv3-heading"><SlidersHorizontal size={17}/> Tinh chỉnh trực tiếp</div>{active==='edit'&&<div className="lv3-ratios">{['Tự do','1:1','4:3','9:16','16:9'].map(r=><button key={r} className={edits.ratio===r?'chosen':''} onClick={()=>mutate({ratio:r})}>{r}</button>)}</div>}{slider('Độ sáng','brightness',40,160)}{slider('Tương phản','contrast',40,160)}{slider('Bão hòa','saturation',0,200)}{active==='adjust'&&<>{slider('Lux','lux',50,150)}{slider('Làm mờ','blur',0,12,'px')}</>}</div>}
-          {active==='filters'&&<div className="lv3-filters-grid">{presets.map(p=><button key={p.id} onClick={()=>handleTool(p.id)} className={edits.preset===p.id?'chosen':''}><span className="lv3-filter-thumb">{image?<img src={image} alt="" style={{filter:p.filter}}/>:<Palette size={30}/>}</span><span>{p.name}</span></button>)}</div>}
-          {N4_TOOLS[selected] && <LocalAiPanel key={selected} operation={N4_TOOLS[selected]} projectId={projectId} assetId={activeAssetId} disabled={!projectReady||assetBusy||projectBusy||!autosaveReady||!!(image?.startsWith('blob:'))} onApply={applyLocalAi}/>}
+        <section className={`lv3-toolbox ${toolboxCollapsed?'lv3-toolbox-collapsed':''}`} aria-label={`Công cụ ${currentCategory.label}`}>
+          <div className="lv3-toolbox-title"><div><small>CÔNG CỤ</small><h2>{currentCategory.label}</h2></div><button className="lv3-icon-btn" title={toolboxCollapsed?"Mở bảng công cụ":"Thu gọn bảng công cụ"} onClick={()=>setToolboxCollapsed(v=>!v)}><ChevronLeft size={18}/></button></div>
+          {!toolboxCollapsed&&<button type="button" className="v46-background-quick-button" disabled={!projectReady||assetBusy}
+            onClick={()=>{setActive('background');setSelected('bg-image');layersBridgeRef.current.pickBackground();}}
+            title="Chọn ảnh nền mới từ máy để ghép phía sau chủ thể">
+            <ImagePlus size={17}/> <span>{backgroundSelection.type==='image'?'Đổi ảnh nền đang dùng':'Thay nền bằng ảnh'}</span><ChevronRight size={15}/>
+          </button>}
+          <div className="lv3-tool-grid" style={{display:active==='filters'||active==='adjust'||active==='template'?'none':undefined}}>{currentCategory.children.map(t=>{const Icon=t.icon||WandSparkles;return <button key={t.id} className={`lv3-tool-item ${selected===t.id?'selected':''}`} onClick={()=>handleTool(t.id)} title={t.label}><span className="lv3-tool-symbol"><Icon size={21}/></span><span>{t.label}</span>{t.status==='soon'&&<small>SAU</small>}</button>})}</div>
+          {active==='edit'&&<div className="lv3-settings"><div className="lv3-heading"><Crop size={17}/> Cắt / Tỷ lệ khung hình</div><div className="lv3-ratios">{['Tự do','1:1','1:2','2:3','3:4','4:3','9:16','16:9'].map(r=><button key={r} className={edits.ratio===r?'chosen':''} onClick={()=>mutate({ratio:r})}>{r}</button>)}</div><small>Ảnh thật là khung cắt. Tỷ lệ mới cắt từ tâm ảnh, không tạo canvas trắng hay nền phụ. PNG giữ pixel gốc tương ứng vùng cắt.</small>
+            {selectedImageLayer&&<div className="v44-image-inspector">
+              <h3>Ảnh đang chọn</h3>
+              <label>Tên lớp <input type="text" maxLength={90} disabled={selectedImageLayer.locked} value={selectedImageLayer.name} onChange={ev=>editImageLayer({name:ev.target.value})}/></label>
+              <label>Độ mờ <b>{selectedImageLayer.opacity}%</b><input type="range" min="0" max="100" disabled={selectedImageLayer.locked} value={selectedImageLayer.opacity} onChange={ev=>editImageLayer({opacity:Number(ev.target.value)})}/></label>
+              {!selectedImageLayer.isBase?<label>Kích thước lớp phụ <b>{Math.round(selectedImageLayer.width)}%</b><input type="range" min="5" max="150" disabled={selectedImageLayer.locked} value={selectedImageLayer.width} onChange={ev=>editImageLayer({width:Number(ev.target.value)})}/></label>:
+              <p className="v44-empty-hint">Ảnh chính luôn phủ đúng khung cắt; không thay đổi kích thước canvas riêng.</p>}
+            </div>}
+          </div>}
+          {active==='background'&&<div className="lv3-settings v44-background-tools v46-background-panel">
+            <div className="lv3-heading"><ImageIcon size={17}/> Thay nền ảnh</div>
+            <p className="v44-hint">Chọn ảnh nền từ máy. Ảnh nền sẽ nằm <b>phía sau chủ thể</b>, được lưu cùng Project và tham gia bộ lọc khi xuất ảnh.</p>
+            <button type="button" className="v46-background-primary" disabled={!projectReady||assetBusy} onClick={()=>layersBridgeRef.current.pickBackground()}>
+              <ImagePlus size={19}/> {backgroundSelection.type==='image'?'Chọn ảnh nền khác':'Tải ảnh nền từ máy'}
+            </button>
+            {backgroundSelection.type==='image'&&backgroundSelection.url&&<div className="v46-background-preview">
+              <img src={backgroundSelection.url} alt="Xem trước nền hiện tại"/>
+              <span><strong>Đã chọn nền ảnh</strong><small>Đang nằm dưới ảnh chính, có thể đổi bất cứ lúc nào</small></span>
+            </div>}
+            <p className="v46-background-help">Nếu đã chọn nền mà <b>không thấy thay đổi</b>, ảnh chính đang che kín nền. Hãy vào <b>Xóa → Xóa nền AI N4</b>, chờ hoàn tất rồi bấm <b>Áp dụng kết quả</b>.</p>
+            <button type="button" className="v46-remove-bg-link" onClick={()=>{setActive('remove');setSelected('n4-removeBg');}}>Mở công cụ Xóa nền AI N4 <ChevronRight size={15}/></button>
+            <div className="v46-background-variants">
+              <button type="button" className={backgroundSelection.type==='transparent'?'chosen':''} onClick={()=>setBackgroundCommand({seq:Date.now()+Math.random(),type:'transparent'})}>Trong suốt</button>
+              <button type="button" className={backgroundSelection.type==='color'?'chosen':''} onClick={()=>setBackgroundCommand({seq:Date.now()+Math.random(),type:'color'})}>Nền màu</button>
+            </div>
+            {backgroundSelection.type==='color'&&<label className="v44-input-label">Màu nền <input type="color" value={backgroundSelection.color} onChange={ev=>setBackgroundCommand({seq:Date.now()+Math.random(),type:'color',color:ev.target.value})}/></label>}
+          </div>}
+          {active==='adjust'&&<div className="lv3-settings"><div className="lv3-heading"><SlidersHorizontal size={17}/> Điều chỉnh ảnh đang chọn</div><button className="n1-reset-adjust" type="button" onClick={()=>mutate({brightness:100,contrast:100,saturation:100,lux:100,blur:0,temperature:0,highlights:100})}>Đặt lại thông số</button>{slider('Độ sáng','brightness',0,200)}{slider('Tương phản','contrast',0,200)}{slider('Bão hòa','saturation',0,200)}{slider('Lux','lux',0,200)}{slider('Nhiệt độ màu','temperature',-100,100,'°')}{slider('Độ chói','highlights',0,200)}{slider('Làm mờ','blur',0,20,'px')}<div className="n1-adjust-actions"><button onClick={()=>handleTool('auto')}>Tự động</button><button onClick={()=>handleTool('n4-enhance')}>AI tăng chất lượng</button></div></div>}
+          {active==='template'&&<div className="n1-template-grid">{FRAME_PRESETS.map(({id,name})=><button key={id} onClick={()=>handleTool('frame-'+id)}><span className={'n1-template-preview n1-frame-'+id}><span/></span><strong>{name}</strong></button>)}</div>}
+          {active==='filters'&&<div className="v43-filter-sections"><p className="v45-mode-hint"><b>Bộ lọc toàn bố cục</b>: ảnh chính, ảnh chèn, nền, chữ, sticker và khung được xem như một hình duy nhất khi lọc/xuất. Layer vẫn chỉnh được ở bên phải.</p>{[...new Set(presets.map(p=>p.group))].map(group=><section key={group}><h3>{group}</h3><div className="lv3-filters-grid">{presets.filter(p=>p.group===group).map(p=><button key={p.id} onClick={()=>handleTool(p.id)} className={edits.preset===p.id?'chosen':''}><span className="lv3-filter-thumb">{image?<img src={image} alt="" style={{filter:p.filter}}/>:<Palette size={30}/>}</span><span>{p.name}</span></button>)}</div></section>)}</div>}
+          {N4_TOOLS[selected] && <LocalAiPanel key={selected} operation={N4_TOOLS[selected]} projectId={projectId} assetId={activeAssetId} sourceUrl={image} disabled={!projectReady||assetBusy||projectBusy||!autosaveReady||!!(image?.startsWith('blob:'))} onApply={applyLocalAi}/>}
           {active==='ai'&&<div className="lv3-ai-box"><strong><Sparkles size={17}/> Gemini Chat</strong><p>Chỉnh ảnh bằng câu lệnh. Có xem trước và Apply; không dùng Local AI N4.</p><button type="button" disabled={!image} onClick={()=>setGeminiOpen(true)}><WandSparkles size={17}/> Mở Gemini Chat</button></div>}
           {active==='beauty'&&<p className="lv3-soon-note">Các công cụ làm đẹp sẽ được Thắng (N2) tích hợp tại đây, các mô hình AI xử lý qua Backend.</p>}
           {active === 'design' && selected === 'text' && (
-            <div className="lv3-settings">
-              <div className="lv3-heading">
-                <Type size={17} /> Thêm văn bản
-              </div>
-              <TextTool
-                onAddText={(text) => {
-                  const id = `${Date.now()}-${Math.random()}`;
-
-                  setTextItems((items) => [
-                    ...items,
-                    {
-                      id,
-                      text,
-                      x: 50,
-                      y: 50,
-                      width: 200,
-                      height: 60,
-                      rotation: 0,
-                    },
-                  ]);
-
-                  setActiveObjectId(id);
-                  setCreativeCommand({seq:Date.now()+Math.random(),kind:'text',value:text});
-                  setLayersOpen(true);
-                  setStatus('Đã thêm văn bản. Nhấp để chọn và kéo chữ trực tiếp trên canvas.');
-                }}
-              />
+            <div className="lv3-settings v44-text-tools">
+              <div className="lv3-heading"><Type size={17}/> Văn bản</div>
+              <p className="v44-hint">Chọn một mẫu kiểu chữ trước khi thêm. Khi đã chọn lớp chữ, bấm mẫu sẽ <b>đổi font cho chính lớp đó</b>, không tạo chữ mới.</p>
+              <button type="button" className="v42-add-text" onClick={()=>{setCreativeCommand({seq:Date.now()+Math.random(),kind:'text',fontFamily:selectedCreativeLayer?.kind==='text'?selectedCreativeLayer.fontFamily:newTextFont,value:'Nhấp đúp để nhập chữ'});setLayersOpen(true);}}>+ Thêm chữ mới</button>
+              {selectedCreativeLayer?.kind==='text'?<>
+                <div className="v44-inspector-head"><strong>Đang chỉnh chữ đã chọn</strong><small>{selectedCreativeLayer.locked?'Đã khóa — mở khóa trong Layers':'Sửa ở đây hoặc nhấp đúp lên chữ'}</small></div>
+                <label className="v44-input-label">Nội dung
+                  <textarea rows={3} value={selectedCreativeLayer.value} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({value:ev.target.value})}/>
+                </label>
+              </>:<p className="v44-empty-hint">Chưa chọn lớp chữ. Chọn font trước rồi bấm “Thêm chữ mới”.</p>}
+              <h3 className="v44-gallery-heading">Kiểu chữ <small>{TEXT_FONT_STYLES.length} mẫu</small></h3>
+              <div className="v44-font-gallery">{TEXT_FONT_STYLES.map(font=><button type="button" key={font.name}
+                className={`v44-font-card ${(selectedCreativeLayer?.kind==='text'?selectedCreativeLayer.fontFamily:newTextFont)===font.font?'active':''}`}
+                disabled={selectedCreativeLayer?.locked===true}
+                onClick={()=>{setNewTextFont(font.font);if(selectedCreativeLayer?.kind==='text')editCreative({fontFamily:font.font});}}
+                title={font.name}>
+                <span className="v44-font-preview" style={{fontFamily:`"${font.font}", sans-serif`}}>{font.sample}</span><small>{font.name}</small>
+              </button>)}</div>
+              {selectedCreativeLayer?.kind==='text'&&<div className="v44-text-properties">
+                <label>Màu chữ <input type="color" value={selectedCreativeLayer.color} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({color:ev.target.value})}/></label>
+                <label>Cỡ chữ <b>{selectedCreativeLayer.fontSize}px</b><input type="range" min="10" max="180" value={selectedCreativeLayer.fontSize} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({fontSize:Number(ev.target.value)})}/></label>
+                <label>Độ rộng <b>{Math.round(selectedCreativeLayer.width)}%</b><input type="range" min="10" max="100" value={selectedCreativeLayer.width} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({width:Number(ev.target.value)})}/></label>
+                <label>Góc xoay <b>{selectedCreativeLayer.rotation}°</b><input type="range" min="-180" max="180" value={selectedCreativeLayer.rotation} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({rotation:Number(ev.target.value)})}/></label>
+                <label>Độ mờ <b>{selectedCreativeLayer.opacity}%</b><input type="range" min="0" max="100" value={selectedCreativeLayer.opacity} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({opacity:Number(ev.target.value)})}/></label>
+              </div>}
+              <p className="v44-hint">Bên phải chỉ còn danh sách Layers: chọn, ẩn/hiện, khóa, đổi thứ tự và xóa lớp.</p>
             </div>
           )}
 
@@ -560,17 +706,26 @@ export default function EditorPage(){
             </div>
           )}
 
+          {active==='design' && selectedCreativeLayer && selectedCreativeLayer.kind!=='text' && (
+            <div className="lv3-settings v44-text-properties v44-other-tools">
+              <div className="lv3-heading">Chỉnh {selectedCreativeLayer.kind==='shape'?'hình khối':'sticker'} đã chọn</div>
+              {selectedCreativeLayer.kind==='sticker'&&<label>Nội dung <textarea rows={2} value={selectedCreativeLayer.value} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({value:ev.target.value})}/></label>}
+              {selectedCreativeLayer.kind==='shape'&&<label>Màu viền <input type="color" value={selectedCreativeLayer.color} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({color:ev.target.value})}/></label>}
+              <label>Kích thước <b>{Math.round(selectedCreativeLayer.width)}%</b><input type="range" min="5" max="120" value={selectedCreativeLayer.width} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({width:Number(ev.target.value)})}/></label>
+              <label>Góc xoay <b>{selectedCreativeLayer.rotation}°</b><input type="range" min="-180" max="180" value={selectedCreativeLayer.rotation} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({rotation:Number(ev.target.value)})}/></label>
+              <label>Độ mờ <b>{selectedCreativeLayer.opacity}%</b><input type="range" min="0" max="100" value={selectedCreativeLayer.opacity} disabled={selectedCreativeLayer.locked} onChange={ev=>editCreative({opacity:Number(ev.target.value)})}/></label>
+            </div>)}
           <div className="lv3-toolbox-footer"><CircleHelp size={16}/> Công cụ có nhãn SAU chưa thực thi.</div>
         </section>
         <section className="lv3-center">
-          <div className="lv3-canvas-toolbar"><div className="lv3-toolbar-label"><Move size={16}/> Không gian chỉnh sửa</div><div className="lv3-toolbar-tools"><button type="button" onClick={()=>setLayersOpen(v=>!v)}><Layers3 size={16}/>{layersOpen?'Ảnh đơn':'Layers'}</button><button onClick={()=>inputRef.current?.click()}><FolderOpen size={16}/> Mở ảnh</button><span className="lv3-line"/><button onClick={()=>mutate({rotation:(edits.rotation+270)%360})} title="Xoay trái"><RotateCcw size={17}/></button><button onClick={()=>mutate({rotation:(edits.rotation+90)%360})} title="Xoay phải"><RotateCw size={17}/></button><button onClick={()=>mutate({flipped:!edits.flipped})} title="Lật ngang"><FlipHorizontal size={17}/></button></div></div>
-          <div className={`lv3-canvas-space ${layersOpen?'n1-with-layers':''}`}>
+          <div className="lv3-canvas-toolbar"><div className="lv3-toolbar-label"><Move size={16}/> Không gian chỉnh sửa</div><div className="lv3-toolbar-tools"><button type="button" onClick={()=>setLayersOpen(v=>!v)}><Layers3 size={16}/>{layersOpen?'Ẩn Layers':'Hiện Layers'}</button><button onClick={()=>inputRef.current?.click()}><FolderOpen size={16}/> Mở ảnh</button></div></div>
+          <div className="lv3-canvas-space n1-with-layers">
             {projectReady&&<LayersWorkspace projectId={projectId} ready={projectReady} originalAssetId={activeAssetId} originalUrl={image}
               originalName={fileName} canvasWidth={canvasSize.width} canvasHeight={canvasSize.height}
-              sourceDocument={projectState} active={layersOpen} onStatus={setStatus}
-              editCommand={layerCommand} creativeCommand={creativeCommand}
-              onSelectImageEdits={v=>setEdits({...initial,...v} as Edits)}/>}
-            {!layersOpen && (image ? (
+              sourceDocument={projectState} active={true} panelOpen={layersOpen} onRequestOriginalImage={()=>inputRef.current?.click()} layerBridgeRef={layersBridgeRef} onZoomChange={next=>setEdits(v=>({...v,zoom:next}))} onStatus={setStatus} projectName={projectName} ratio={edits.ratio} zoom={edits.zoom} exportCommand={exportCommand} historyCommand={historyCommand} frameCommand={frameCommand} backgroundCommand={backgroundCommand} groupFilterCommand={groupFilterCommand} onHistoryAvailability={(canUndo,canRedo)=>{setLayerCanUndo(canUndo);setLayerCanRedo(canRedo);}}
+              editCommand={layerCommand} creativeCommand={creativeCommand} creativeEditCommand={creativeEditCommand} imageLayerEditCommand={imageLayerEditCommand} onSelectCreativeLayer={handleCreativeSelection} onSelectImageLayer={handleImageLayerSelection} onSelectBackground={setBackgroundSelection} onSelectGroupFilter={filter=>setEdits(v=>v.preset===filter?v:{...v,preset:filter})}
+              onSelectImageEdits={(v,asset)=>{setEdits(old=>({...old,...v} as Edits));if(asset){setActiveAssetId(asset.assetId);setImage(asset.url);setFileName(asset.name);}}}/>}
+            {!projectReady && (image ? (
               <div className="lv3-image-stage">
                 <img
                   src={image}
@@ -647,7 +802,7 @@ export default function EditorPage(){
               </div>
             ))}
           </div>
-          <div className="lv3-bottom"><span className="lv3-message" role="status">{status}</span><div className="lv3-zoom"><button onClick={()=>mutate({zoom:Math.max(40,edits.zoom-10)})} title="Thu nhỏ"><ZoomOut size={17}/></button><b>{edits.zoom}%</b><button onClick={()=>mutate({zoom:Math.min(200,edits.zoom+10)})} title="Phóng to"><ZoomIn size={17}/></button><button onClick={()=>mutate({zoom:100})} title="Về 100%">100%</button></div></div>
+          <div className="lv3-bottom"><span className="lv3-message" role="status">{status}</span><div className="lv3-zoom"><button onClick={()=>setEdits(v=>({...v,zoom:Math.max(50,v.zoom-5)}))} title="Thu nhỏ"><ZoomOut size={17}/></button><b>{edits.zoom}%</b><button onClick={()=>setEdits(v=>({...v,zoom:Math.min(1600,v.zoom+5)}))} title="Phóng to"><ZoomIn size={17}/></button><button onClick={()=>setEdits(v=>({...v,zoom:100}))} title="Về 100%">100%</button></div></div>
                 </section>
       </div>
     </div>
